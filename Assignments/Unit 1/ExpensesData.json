@@ -1,0 +1,116 @@
+[
+    {
+        "ExpenseDate": "2025-10-28",
+        "Category": "Breakfast",
+        "Amount": 20.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Lunch",
+        "Amount": 30.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Breakfast",
+        "Amount": 20.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Lunch",
+        "Amount": 30.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Breakfast",
+        "Amount": 20.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Lunch",
+        "Amount": 30.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Breakfast",
+        "Amount": 20.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Dinner",
+        "Amount": 30.0,
+        "Description": "Food"
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "",
+        "Amount": 40.0,
+        "Description": ""
+    },
+	{
+        "ExpenseDate": "2025-10-28",
+        "Category": "Late Night Snack",
+        "Amount": 40.0,
+        "Description": ""
+    }
+]
