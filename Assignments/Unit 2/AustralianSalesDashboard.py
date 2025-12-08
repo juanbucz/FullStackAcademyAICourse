@@ -475,7 +475,6 @@ timeofday_mapping = {
 # ============================================    
 
 st.sidebar.title("🎛️ Report Filters")
-show_data_table = st.sidebar.checkbox("Show Raw Data", value=False)
 
 # Emojis can be directly embedded into streamlit text!!
 st.sidebar.header("🌏 Location")
@@ -549,7 +548,7 @@ tabOverview, tabState, tabGroup, tabTimeOfDay = st.tabs([
 ])
 
 # ============================================
-# Dashboard Reporting Tabs
+# Overview Tab
 # ============================================
 with tabOverview:
     st.markdown("#### **Sales Overview**")
@@ -588,11 +587,20 @@ with tabOverview:
         DisplayPieChart(df_target=df_ausapparalsales_filtered, 
                         feature_column='Sales', 
                         groupby_column='TimeOfDay')
+        
+
+    # Quick stats for selected report
+    st.markdown("###### Summary Statistics")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Sales", format_currency(df_ausapparalsales_filtered['Sales'].sum()))
+    col2.metric("Avg Transaction", format_currency(df_ausapparalsales_filtered['Sales'].mean()))
+    col3.metric("Total Transactions", format_number(df_ausapparalsales_filtered['Sales'].count()))        
 
 
 
 # ============================================
-# Dashboard Reporting Tabs
+# State Tab
 # ============================================
 with tabState:
     st.markdown("##### **State Sales Analysis**")
@@ -625,7 +633,7 @@ with tabState:
     DisplayStatisticsSummary(df_state_summary)
 
 # ============================================
-# Dashboard Reporting Tabs
+# Group Tab
 # ============================================
 with tabGroup:
     st.markdown("##### **Group Sales Analysis**")
@@ -659,7 +667,7 @@ with tabGroup:
 
 
 # ============================================
-# Dashboard Reporting Tabs
+# TimeOfDay Tab
 # ============================================
 with tabTimeOfDay:
     st.markdown("##### **Time of Day Sales Analysis**")
