@@ -85,14 +85,73 @@ def load_data():
     # Encode Date Features
     df['Month'] = df['Date'].dt.month
     df['MonthName'] = df['Date'].dt.month_name()
-    df['DayName'] = df['Date'].dt.day
+    df['Day'] = df['Date'].dt.day
     df['DayName'] = df['Date'].dt.day_name()
     df['WeekOfYear'] = df['Date'].dt.isocalendar().week
     df['Quarter'] = df['Date'].dt.quarter
 
     df.rename(columns={'Time': 'TimeOfDay'}, inplace=True)
+
+    # Data Type Conversions
+
+    # int8 Conversions
+    columns = ['Unit','Month','WeekOfYear']
+    df[columns] = df[columns].astype('int8')
+
+    columns = ['Day']
+    df[columns] = df[columns].astype('int16')
+
+    # int32 Conversions
+    columns = ['Sales']
+    df[columns] = df[columns].astype('int64')
     
     return df
+
+def PrintDataFrameStatus(df_target):
+    # Print Stats
+    print("***********************************")
+    print("Description Stats")
+    print("***********************************")
+    print()
+    print(df_target.describe(include='all').T)
+    print()
+
+    # Print df Column Info
+    print("***********************************")
+    print("Basic Info of imported data set")
+    print("***********************************")
+    print()
+    df_target.info()
+    print()
+    print()
+
+    print(f'df_floridabikerentals Shape:{df_target.shape}')
+    print()
+
+    print('Do we have any features with null values?:')
+    print(df_target.isnull().any().any())
+    print()
+
+    print('Feature Columns with that have null values:')
+    print(df_target.isnull().sum()[df_target.isnull().sum() > 0])
+    print()
+
+    print('Do we have any features with nan values?:')
+    print(df_target.isna().any().any())
+
+    print("***********************************")
+    print("First 20 rows of Data")
+    print("***********************************")
+    print()
+    print(df_target.head(20))
+    print()
+
+    print("***********************************")
+    print("First 20 rows of Random Sample Data")
+    print("***********************************")
+    print()
+    print(df_target.sample(20))
+    print
 
 # Initial load of data
 df_ausapparalsales = load_data()
@@ -280,12 +339,107 @@ def DisplayBarChart(df_target, feature_column, groupby_column, fig_size=None, pl
     plt.close()
 
 
+def DisplayGroupedBarChart(df_target, feature_column, groupby_column, time_column, fig_size=None, plot_title=None, palette='viridis'):
+
+    if fig_size is None:
+        fig_size = (8, 5)
+
+    fig, ax = plt.subplots(figsize=fig_size)
+    
+    data = df_target.groupby([groupby_column, time_column])[feature_column].sum().reset_index()
+
+    sns.barplot(data=data, x=groupby_column, y=feature_column, hue=time_column, ax=ax, palette=palette)
+
+    ax.set_xlabel(groupby_column, fontweight='bold')
+    ax.set_ylabel(feature_column, fontweight='bold')
+    plt.xticks(rotation=45)
+    plt.legend(title=time_column)
+
+    if plot_title:
+        plt.suptitle(plot_title, y=1.02, fontsize=12, fontweight='bold')
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+def DisplayHeatmap(df_target, feature_column, groupby_column, time_column, fig_size=None, plot_title=None, palette='viridis'):
+
+    if fig_size is None:
+        fig_size = (8, 5)
+
+    fig, ax = plt.subplots(figsize=fig_size)
+    
+    pivot = df_target.pivot_table(
+        values=feature_column, 
+        index=groupby_column, 
+        columns=time_column, 
+        aggfunc='sum'
+    )
+
+    sns.heatmap(pivot, annot=True, fmt='.0f', cmap=palette, ax=ax)
+
+    ax.set_xlabel(time_column, fontweight='bold')
+    ax.set_ylabel(groupby_column, fontweight='bold')
+
+    if plot_title:
+        plt.suptitle(plot_title, y=1.02, fontsize=12, fontweight='bold')
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+
+def DisplayLineChart(df_target, feature_column, groupby_column, time_column, fig_size=None, plot_title=None, palette='viridis'):
+
+    if fig_size is None:
+        fig_size = (8, 5)
+
+    fig, ax = plt.subplots(figsize=fig_size)
+    
+    data = df_target.groupby([time_column, groupby_column])[feature_column].sum().reset_index()
+
+    sns.lineplot(data=data, x=time_column, y=feature_column, hue=groupby_column, marker='o', ax=ax, palette=palette)
+
+    ax.set_xlabel(time_column, fontweight='bold')
+    ax.set_ylabel(feature_column, fontweight='bold')
+    plt.xticks(rotation=45)
+    plt.legend(title=groupby_column)
+
+    if plot_title:
+        plt.suptitle(plot_title, y=1.02, fontsize=12, fontweight='bold')
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+def CreateStatisticsSummary(df_target, group_cols):
+
+    return df_target.groupby(group_cols).agg(
+                                                Transactions=('Sales', 'count'),
+                                                Total_Sales=('Sales', 'sum'),
+                                                Avg_Sales=('Sales', 'mean'),
+                                                Median_Sales=('Sales', 'median'),
+                                                Avg_Units=('Unit', 'mean')
+                                            ).round(2).reset_index()   
+
+
+def DisplayStatisticsSummary(df_target, plot_title=None):
+
+    if plot_title is not None:
+        st.markdown(f'###### {plot_title}')
+
+    st.dataframe(df_target.style.format({
+        'Total_Sales': '${:,.0f}',
+        'Avg_Sales': '${:,.0f}',
+        'Median_Sales': '${:,.0f}',
+        'Avg_Units': '{:.1f}'
+    }), use_container_width=True)     
+
 def format_currency(value):
     return f"${value:,.0f}"
 
 def format_number(value):
     return f"{value:,.0f}"
-
 
 # ============================================
 # ============================================
@@ -307,6 +461,13 @@ st.markdown("---")
 all_states = df_ausapparalsales['State'].unique().tolist()
 all_groups = df_ausapparalsales['Group'].unique().tolist()
 all_times = df_ausapparalsales['TimeOfDay'].unique().tolist()
+
+timeofday_mapping = {
+                        "Daily": "DayName",
+                        "Weekly": "WeekOfYear",
+                        "Monthly": "MonthName",
+                        "Quarterly": "Quarter"
+                    }
 
 
 # ============================================
@@ -429,12 +590,39 @@ with tabOverview:
                         groupby_column='TimeOfDay')
 
 
+
 # ============================================
 # Dashboard Reporting Tabs
 # ============================================
 with tabState:
     st.markdown("##### **State Sales Analysis**")
 
+    report_type = st.selectbox("Select Report Type", 
+                            ["Quarterly","Monthly","Weekly","Daily"],
+                            key="state_time_select")
+    
+    df_state_summary = CreateStatisticsSummary(df_ausapparalsales_filtered, 'State')
+
+    timeofday = timeofday_mapping[report_type]
+
+    # Row 1: Charts (3 columns)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("###### Grouped Bar")
+        DisplayGroupedBarChart(df_ausapparalsales_filtered, 'Sales', 'State', timeofday)
+
+    with col2:
+        st.markdown("###### Heatmap")
+        DisplayHeatmap(df_ausapparalsales_filtered, 'Sales', 'State', timeofday)
+
+    with col3:
+        st.markdown("###### Trend Line")
+        DisplayLineChart(df_ausapparalsales_filtered, 'Sales', 'State', timeofday)    
+
+    # Row 2: Summary Table
+    st.markdown("###### State Statistics Summary")
+    DisplayStatisticsSummary(df_state_summary)
 
 # ============================================
 # Dashboard Reporting Tabs
@@ -442,9 +630,63 @@ with tabState:
 with tabGroup:
     st.markdown("##### **Group Sales Analysis**")
 
+    report_type = st.selectbox("Select Report Type", 
+                            ["Quarterly","Monthly","Weekly","Daily"],
+                            key="group_time_select")
+    
+    df_group_summary = CreateStatisticsSummary(df_ausapparalsales_filtered, 'Group')
+
+    timeofday = timeofday_mapping[report_type]
+
+    # Row 1: Charts (3 columns)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("###### Grouped Bar")
+        DisplayGroupedBarChart(df_ausapparalsales_filtered, 'Sales', 'Group', timeofday)
+
+    with col2:
+        st.markdown("###### Heatmap")
+        DisplayHeatmap(df_ausapparalsales_filtered, 'Sales', 'Group', timeofday)
+
+    with col3:
+        st.markdown("###### Trend Line")
+        DisplayLineChart(df_ausapparalsales_filtered, 'Sales', 'Group', timeofday)    
+
+    # Row 2: Summary Table
+    st.markdown("###### Group Statistics Summary")
+    DisplayStatisticsSummary(df_group_summary)    
+
 
 # ============================================
 # Dashboard Reporting Tabs
 # ============================================
 with tabTimeOfDay:
     st.markdown("##### **Time of Day Sales Analysis**")
+
+    report_type = st.selectbox("Select Report Type", 
+                            ["Quarterly","Monthly","Weekly","Daily"],
+                            key="timeofday_time_select")
+
+    df_timeofday_summary = CreateStatisticsSummary(df_ausapparalsales_filtered, 'TimeOfDay')
+
+    timeofday = timeofday_mapping[report_type]
+
+    # Row 1: Charts (3 columns)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("###### Grouped Bar")
+        DisplayGroupedBarChart(df_ausapparalsales_filtered, 'Sales', 'TimeOfDay', timeofday)
+
+    with col2:
+        st.markdown("###### Heatmap")
+        DisplayHeatmap(df_ausapparalsales_filtered, 'Sales', 'TimeOfDay', timeofday)
+
+    with col3:
+        st.markdown("###### Trend Line")
+        DisplayLineChart(df_ausapparalsales_filtered, 'Sales', 'TimeOfDay', timeofday)    
+
+    # Row 2: Summary Table
+    st.markdown("###### Group Statistics Summary")
+    DisplayStatisticsSummary(df_timeofday_summary)        
