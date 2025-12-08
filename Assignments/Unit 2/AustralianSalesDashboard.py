@@ -6,8 +6,13 @@ from scipy.stats import t
 from scipy.stats import boxcox, yeojohnson, shapiro
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+
+# Use seaborn because of familiariy and flexibility
 import seaborn as sns
+
+# Use streamlit because easy web page with ability for interactive model popup
 import streamlit as st
+from streamlit_modal import Modal
 
 import platform
 import sys
@@ -60,6 +65,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
+# ============================================
+# ============================================
+# Utility Functions For Modal Popup
+# ============================================
+# ============================================
+
+# Need to use a session state so we can save context 
+# of what's been clicked and the parameters associated with it
+# This will be used when we open the model popup and render chart
+
+# Initialize session state
+if 'selected_chart' not in st.session_state:
+    st.session_state.selected_chart = None
+    st.session_state.chart_params = {}
+
+# Define modal once
+modal = Modal("📊 Enlarged Chart View", key="chart_modal")
 
 # ============================================
 # ============================================
@@ -548,6 +571,22 @@ tabOverview, tabState, tabGroup, tabTimeOfDay = st.tabs([
 ])
 
 # ============================================
+# Single Model Open Handler
+# ============================================
+if modal.is_open():
+    with modal.container():
+        params = st.session_state.chart_params
+        st.header('Model Clicked!!')        
+        # if st.session_state.selected_chart == "bar":
+        #     DisplayGroupedBarChart(df, 'Sales', params['groupby'], params['time'], fig_size=(12, 8))
+        
+        # elif st.session_state.selected_chart == "heatmap":
+        #     DisplayHeatmap(df, 'Sales', params['groupby'], params['time'], fig_size=(12, 8))
+        
+        # elif st.session_state.selected_chart == "line":
+        #     DisplayLineChart(df, 'Sales', params['groupby'], params['time'], fig_size=(12, 8))
+
+# ============================================
 # Overview Tab
 # ============================================
 with tabOverview:
@@ -558,10 +597,26 @@ with tabOverview:
     with col1:
         st.markdown("###### Sales by State")
 
+        # Title and button on same row
+#         title_col, btn_col = st.columns([2, 1])
+#         with title_col:
+#             if st.button("🔍", key="enlarge_sales_overview_barchart", help="Enlarge"):
+#                 modal.open()
+# #            st.markdown("###### Sales by State")
+#         with btn_col:
+#             # if st.button("🔍", key="enlarge_sales_overview_barchart", help="Enlarge"):
+#             #     modal.open()
+#             st.markdown("###### Sales by State")
+
         DisplayBarChart(df_target=df_ausapparalsales_filtered, 
                         feature_column='Sales', 
                         groupby_column='State',
                         horizontal=True)
+        
+        # if st.button("🔍 Enlarge", key="enlarge_sales_overview_barchart"):
+        #     # st.session_state.selected_chart = "bar"
+        #     # st.session_state.chart_params = {'groupby': 'State', 'time': time_col}
+        #     modal.open()
 
     with col2:
         st.markdown("###### Sales by Group")
