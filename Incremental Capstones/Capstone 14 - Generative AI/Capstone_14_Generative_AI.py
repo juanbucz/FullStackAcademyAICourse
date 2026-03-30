@@ -268,12 +268,32 @@ def demo_few_shot(text: str, backend: str) -> tuple[str, str]:
 BIKE_OPTIONS = ['Electric', 'Road', 'City', 'Hybrid', 'Mountain Bike']
 DISCOUNT_OPTIONS = ['Regular Price', 'Customer Loyalty - 10%', 'Spring Sale - 15%', 'Last Years Models - 20%', 'Clearance 30%']
 THEME_OPTIONS = ['Rugged', 'Sleek', 'Eco-friendly', 'Premium']
-METHOD_OPTIONS = ['Zero-Shot CoT', 'Few-Shot', 'ReAct', 'Chain']
+METHOD_OPTIONS = ['Zero-Shot', 'Few-Shot', 'Chain of Thought']
 
 DEFAULT_BIKE = 'Select a Bike Type'
 DEFAULT_DISCOUNT = 'Select A Discount'
 DEFAULT_THEME = 'Select a Theme'
 DEFAULT_METHOD = 'Select a Method'
+
+# Define the "Empty" or "Default" state with CSS
+# Default appearance of ad output block
+DEFAULT_EMPTY_AD_HTML = """
+<div style='background-color: #FFFDD0; 
+            min-height: 300px; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 28px;
+            text-align: center;'>
+    <i>Custom Generated  advertisement will appear here...</i>
+</div>
+"""
 
 ## ======================================================
 ##
@@ -284,31 +304,70 @@ DEFAULT_METHOD = 'Select a Method'
 def clean_bike_list(evt: gr.SelectData):
     if evt.value == DEFAULT_BIKE:
         return gr.update()
-    return gr.update(choices=BIKE_OPTIONS)
+    return gr.update(choices=BIKE_OPTIONS), ""
 
 def clean_discount_list(evt: gr.SelectData):
     if evt.value == DEFAULT_DISCOUNT:
         return gr.update()
-    return gr.update(choices=DISCOUNT_OPTIONS)
+    return gr.update(choices=DISCOUNT_OPTIONS), ""
 
 def clean_theme_list(evt: gr.SelectData):
     if evt.value == DEFAULT_THEME:
         return gr.update()    
-    return gr.update(choices=THEME_OPTIONS)
+    return gr.update(choices=THEME_OPTIONS), ""
 
 def clean_method_list(evt: gr.SelectData):
     if evt.value == DEFAULT_METHOD:
         return gr.update()
-    return gr.update(choices=METHOD_OPTIONS)
+    return gr.update(choices=METHOD_OPTIONS), ""
+
+def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
+    return "", f'create_zero_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+
+def create_few_shot_ad_prompt(bike, discount_plan, ad_theme):
+    return "", f'create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+
+def create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme):
+    return "", f'create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+
+def generate_ad_campaign(bike, discount_plan, ad_theme, method):
+
+    # Validate input parameters
+    if bike == DEFAULT_BIKE:
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Bike Type.</span>", DEFAULT_EMPTY_AD_HTML
+    
+    if discount_plan == DEFAULT_DISCOUNT:
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Discount Plan.</span>", DEFAULT_EMPTY_AD_HTML
+    
+    if ad_theme == DEFAULT_THEME:
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Ad Theme.</span>",  DEFAULT_EMPTY_AD_HTML
+    
+    if method == DEFAULT_METHOD:
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Prompting Method.</span>",  DEFAULT_EMPTY_AD_HTML
+    
+    # Call Correct Prompt Creation Function
+
+    match method:
+        case 'Zero-Shot':
+            create_zero_shot_ad_prompt(bike, discount_plan, ad_theme)
+        case 'Few-Shot':
+            create_few_shot_ad_prompt(bike, discount_plan, ad_theme)
+        case 'Chain of Thought':
+            create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme)
+    
+    print()
+        
+
 
 # Return a tuple of updates in the exact order they appear in 'outputs'
-def reset_dropdowns():
+def reset_input_controls():
     return (
         gr.update(choices=[DEFAULT_BIKE] + BIKE_OPTIONS, value=DEFAULT_BIKE),
         gr.update(choices=[DEFAULT_DISCOUNT] + DISCOUNT_OPTIONS, value=DEFAULT_DISCOUNT),
         gr.update(choices=[DEFAULT_THEME] + THEME_OPTIONS, value=DEFAULT_THEME),
         gr.update(choices=[DEFAULT_METHOD] + METHOD_OPTIONS, value=DEFAULT_METHOD),
-        #"" # This represents the ad_output textbox/textarea
+        "", # Clear out Error Label
+        DEFAULT_EMPTY_AD_HTML # return default text/colour/size for ad output
     )
 
 with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
@@ -378,19 +437,12 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
         # Left alignment by spacer, pushing columns to the left
         with gr.Column(scale=1):
             pass
-
-    # Item is selected in DropDown list box; instructions prompt removed from list
-    bike_type.select(fn=clean_bike_list, inputs=None, outputs=bike_type)
-    discount.select(fn=clean_discount_list, inputs=None, outputs=discount)
-    theme.select(fn=clean_theme_list, inputs=None, outputs=theme)
-    prompt_type.select(fn=clean_method_list, inputs=None, outputs=prompt_type)        
-
-    reset_btn.click(
-        fn=reset_dropdowns,
-        inputs=None,
-        outputs=[bike_type, discount, theme, prompt_type]
-    )        
     
+    error_label = gr.Markdown(value="", visible=True)
+
+    ad_output = gr.HTML(value=DEFAULT_EMPTY_AD_HTML,
+                        label="Generated Advertisement")
+
     gr.Markdown("""
     ---
     
@@ -404,6 +456,24 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
     
     **Next step:** Try Activity 4 to build your own LangChain chains!
     """)
+
+    # Item is selected in DropDown list box; instructions prompt removed from list
+    bike_type.select(fn=clean_bike_list, inputs=None, outputs=[bike_type, error_label])
+    discount.select(fn=clean_discount_list, inputs=None, outputs=[discount, error_label])
+    theme.select(fn=clean_theme_list, inputs=None, outputs=[theme, error_label])
+    prompt_type.select(fn=clean_method_list, inputs=None, outputs=[prompt_type, error_label])        
+
+    submit_btn.click(
+        fn=generate_ad_campaign,
+        inputs=[bike_type, discount, theme, prompt_type],
+        outputs=[error_label, ad_output]
+    )      
+
+    reset_btn.click(
+        fn=reset_input_controls,
+        inputs=None,
+        outputs=[bike_type, discount, theme, prompt_type, error_label, ad_output]
+    )     
 
 
 # Launch the Gradio app
