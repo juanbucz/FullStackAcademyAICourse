@@ -137,6 +137,8 @@ DEFAULT_EMPTY_AD_HTML = """
 </div>
 """
 
+DEFAULT_REASONING_CHAIN='Chain of Thought Reasoning Steps Will Appear Here...'
+
 
 ## ======================================================
 ##
@@ -164,7 +166,7 @@ def clean_method_list(evt: gr.SelectData):
         return gr.update()
     return gr.update(choices=METHOD_OPTIONS), ""
 
-def create_zero_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str]:
+def create_zero_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str, str]:
     
     #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_zero_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
     # Using ChatPromptTemplate with a System Message enforces better "Zero-Shot" behavior
@@ -179,22 +181,24 @@ def create_zero_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> 
          
         2. **Thematic Palette**: 
            - You MUST select a background-color that represents {ad_theme} (e.g., Earthy for Rugged, Charcoal/Dark for Sleek, Green for Eco-friendly).
-           - **CRITICAL**: Set `color: #FFFFFF !important;` for the Outer Wrapper to ensure all text is white and readable on these dark theme colors.
+           - **CRITICAL**: Set `color: #FFFFFF !important;` for the Outer Wrapper to ensure all text is white and readable.
 
         3. **Outer Wrapper**: 
            - Use a <div> with the background-color from Rule 2 and white text.
-           - Style: `padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #333; border-radius: 10px; font-family: Arial, sans-serif;`
+           - Style: `padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #333; border-radius: 10px; font-family: Arial, sans-serif; overflow: hidden;`
 
         4. **The Header**: 
            - Use `<div style="background-color: #FFFFFF; color: #000000 !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px; border: 1px solid #000;">BikeEase: {bike} Adventure</div>`
+         
+        5. **The Image**: 
+           - Use `<img src="https://loremflickr.com/300/200/{bike},bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px; border: 1px solid #FFF;">`         
 
-        5. **Body & Features**:
-           - Write 4-5 marketing sentences strictly using the vocabulary and brand voice of the {ad_theme} theme. 
-           - Use `style="font-size: 16px; line-height: 1.5; color: #FFFFFF;"` to ensure visibility.
-           - Add a `<ul>` list of 4 key features tailored specifically to the {ad_theme} nature of the bike.
+        6. **Body & Features**:
+           - Next to the image, write 4-5 marketing sentences strictly using the vocabulary and brand voice of the {ad_theme} theme. Style: `style="font-size: 16px; line-height: 1.5; color: #FFFFFF;"`
+           - Underneath the image and sentences, add a `<ul>` list of 4 key features tailored to the {ad_theme} nature. **IMPORTANT**: Use `style="clear: both; padding-top: 15px; color: #FFFFFF;"` for the list.
            - Discount: `<span style="background-color: yellow; color: #000000 !important; font-weight: bold; padding: 2px 5px; border: 1px solid black;">{discount_plan}</span>`
 
-        6. **The Button**: 
+        7. **The Button**: 
            - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #FFFFFF !important; color: #000000 !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px; border: 2px solid #000;">Shop Now - {discount_plan} Off</a>`
         """)
     ])
@@ -213,9 +217,9 @@ def create_zero_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> 
     clean_result = result.replace("```html", "").replace("```", "").strip()
     
     # ErrorLabel, <HTML> Ad Content
-    return "", clean_result
+    return "", clean_result, DEFAULT_REASONING_CHAIN
 
-def create_few_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str]:
+def create_few_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str, str]:
 
     #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
 
@@ -278,7 +282,7 @@ def create_few_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> t
         ("human", "Create a detailed advertisement for a {bike} bike. Theme: {ad_theme}. Discount: {discount_plan}."),
     ])
     
-    chain = prompt | llm | StrOutputParser()
+    chain = prompt | ollama_client | StrOutputParser()
     
     result = chain.invoke({
         "bike": bike, 
@@ -287,68 +291,93 @@ def create_few_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> t
     })
 
     # Cleaning backticks
-    clean_result = result.replace("```html", "").replace("```", "").strip()
+    clean_result = result.replace("```html", "").replace(": HTML GENERATION", "").replace("```", "").strip()
     
-    return "", clean_result
+    return "", clean_result, DEFAULT_REASONING_CHAIN
 
-def create_few_shot_ad_prompt1(bike, discount_plan, ad_theme):
-   
-    #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
 
+def create_chain_of_thought_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str, str]:
+    
+    # return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
+    
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a professional marketing expert. Output ONLY valid HTML and inline CSS. Every tag MUST have a style attribute."),
-        ("human", """Create a detailed advertisement for a {bike} bike.
-        Theme: {ad_theme}
-        Discount: {discount_plan}
+        ("system", "Strict Protocol: You are a two-stage generator. You are FORBIDDEN from generating HTML until you have written '### STEP 1: DESIGN REASONING'. You must output BOTH steps."),
+        ("human", """[CRITICAL: DO NOT SKIP STEP 1]
         
-        Requirements:
-        1. **Outer Wrapper**: 
-           - Use `<div style="background-color: #FFFDD0; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #0056b3; border-radius: 10px; font-family: Arial, sans-serif;">`
+        ### TASK: Create a {ad_theme} advertisement for a {bike} bike.
+        
+        ### REQUIRED OUTPUT STRUCTURE:
+        You must strictly follow this sequence:
+        1. Write the header: '### STEP 1: DESIGN REASONING'
+        2. Provide your analysis of the {ad_theme} theme and color palette.
+        3. Write the header: '### STEP 2: HTML GENERATION'
+        4. Provide the raw HTML code.
 
+        --- 
+        ### STEP 2 HTML RULES (DO NOT USE MARKDOWN BACKTICKS):
+        1. **Outer Wrapper**: <div> with {ad_theme} background-color and `color: #FFFFFF !important;`. 
+           Style: `padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #333; border-radius: 10px; font-family: Arial, sans-serif; overflow: hidden;`
+        
         2. **The Header**: 
-           - Use `<div style="background-color: #0056b3; color: #FFFFFF !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">BikeEase: {bike} Adventure</div>`
-
+           `<div style="background-color: #FFFFFF; color: #000000 !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px; border: 1px solid #000;">BikeEase: {bike} Adventure</div>`
+        
         3. **The Image**: 
-           - Use `<img src="https://loremflickr.com/300/200/{bike},bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px;">`
-
-        4. **Body & Features**:
-           - Write 4-5 detailed sentences of marketing copy. Style: `style="color: #000000; font-size: 16px; line-height: 1.5;"`
-           - Directly under the sentences, add a `<ul>` list of 4 key features.
-           - Discount style: `<span style="background-color: yellow; font-weight: bold; padding: 2px 5px; border: 1px solid black;">{discount_plan}</span>`
-           - Features container style: `style="clear: both; margin-top: 20px; color: #000000;"`
-
+           `<img src="https://loremflickr.com/300/200/{bike},bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px; border: 1px solid #FFF;">`
+        
+        4. **Body & Features**: 
+           - Write 4-5 marketing sentences in {ad_theme} voice. Style: `color: #FFFFFF; font-size: 16px; line-height: 1.5;`
+           - Add `<ul>` with 4 features. Style: `clear: both; padding-top: 15px; color: #FFFFFF;`
+           - Discount: `<span style="background-color: yellow; color: #000000 !important; font-weight: bold; padding: 2px 5px; border: 1px solid black;">{discount_plan}</span>`
+        
         5. **The Button**: 
-           - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3 !important; color: #FFFFFF !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">BikeEase - Shop Now - {discount_plan} Off</a>`
+           `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #FFFFFF !important; color: #000000 !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px; border: 2px solid #000;">Shop Now - {discount_plan} Off</a>`
+
+        [FINAL REMINDER]: You MUST start with '### STEP 1: DESIGN REASONING'. Failure to provide Step 1 is a violation of instructions.
         """)
     ])
     
-    # The Chain remains the same
     chain = prompt | ollama_client | StrOutputParser()
     
-    # ErrorLabel, <HTML> Ad Content
-    return "", chain.invoke({
-        "bike": bike,
-        "ad_theme": ad_theme,
+    # Invoke with the three dynamic variables
+    full_output = chain.invoke({
+        "bike": bike, 
+        "ad_theme": ad_theme, 
         "discount_plan": discount_plan
-    })    
+    })
 
-def create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme):
-    return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
+    # Check whether we've received split output with generated HTML and Explanations
+    # print(f'Output From llm: {full_output}')
 
-def generate_ad_campaign(bike, discount_plan, ad_theme, method):
+
+    if "### STEP 2" in full_output:
+        parts = full_output.split("### STEP 2")
+        thought_process = parts[0].replace("### STEP 1:", "").strip()
+        thought_process = thought_process.replace(".", ".\n")
+        
+        html_output = parts[1].replace("HTML GENERATION (STRICT REQUIREMENTS)", "").strip()
+    else:
+        thought_process = "Model proceeded directly to output."
+        html_output = full_output
+
+    # Final cleanup to remove markdown backticks if the model ignored the system prompt
+    clean_html = html_output.replace("```html", "").replace(": HTML GENERATION", "").replace("```", "").strip()
+    
+    return "", clean_html, thought_process
+
+def generate_ad_campaign(bike: str, discount_plan: str, ad_theme: str, method: str)-> tuple[str, str, str]:
 
     # Validate input parameters
     if bike == DEFAULT_BIKE:
-        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Bike Type.</span>", DEFAULT_EMPTY_AD_HTML
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Bike Type.</span>", DEFAULT_EMPTY_AD_HTML, DEFAULT_REASONING_CHAIN
     
     if discount_plan == DEFAULT_DISCOUNT:
-        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Discount Plan.</span>", DEFAULT_EMPTY_AD_HTML
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Discount Plan.</span>", DEFAULT_EMPTY_AD_HTML, DEFAULT_REASONING_CHAIN
     
     if ad_theme == DEFAULT_THEME:
-        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Ad Theme.</span>",  DEFAULT_EMPTY_AD_HTML
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Ad Theme.</span>",  DEFAULT_EMPTY_AD_HTML, DEFAULT_REASONING_CHAIN
     
     if method == DEFAULT_METHOD:
-        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Prompting Method.</span>",  DEFAULT_EMPTY_AD_HTML
+        return "<span style='color: red; font-weight: bold; font-size: 22px;'>⚠️ Error: Please select a valid Prompting Method.</span>",  DEFAULT_EMPTY_AD_HTML, DEFAULT_REASONING_CHAIN
     
     # Call Correct Prompt Creation Function
 
@@ -377,7 +406,8 @@ def reset_input_controls():
         gr.update(choices=[DEFAULT_THEME] + THEME_OPTIONS, value=DEFAULT_THEME),
         gr.update(choices=[DEFAULT_METHOD] + METHOD_OPTIONS, value=DEFAULT_METHOD),
         "", # Clear out Error Label
-        DEFAULT_EMPTY_AD_HTML # return default text/colour/size for ad output
+        DEFAULT_EMPTY_AD_HTML, # return default text/colour/size for ad output
+        DEFAULT_REASONING_CHAIN # Clear out reasoning chain
     )
 
 with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
@@ -450,11 +480,15 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
         # Left alignment by spacer, pushing columns to the left
         with gr.Column(scale=1):
             pass
-    
+
     error_label = gr.Markdown(value="", visible=True)
 
     ad_output = gr.HTML(value=DEFAULT_EMPTY_AD_HTML,
                         label="Generated Advertisement")
+    
+    logic_display = gr.Textbox(value=DEFAULT_REASONING_CHAIN,
+                               label="Reasoning Chain", 
+                               interactive=False)
 
     # Item is selected in DropDown list box; instructions prompt removed from list
     bike_type.select(fn=clean_bike_list, inputs=None, outputs=[bike_type, error_label])
@@ -465,13 +499,13 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
     submit_btn.click(
         fn=generate_ad_campaign,
         inputs=[bike_type, discount, theme, prompt_type],
-        outputs=[error_label, ad_output]
+        outputs=[error_label, ad_output, logic_display]
     )      
 
     reset_btn.click(
         fn=reset_input_controls,
         inputs=None,
-        outputs=[bike_type, discount, theme, prompt_type, error_label, ad_output]
+        outputs=[bike_type, discount, theme, prompt_type, error_label, ad_output, logic_display]
     )     
 
 
