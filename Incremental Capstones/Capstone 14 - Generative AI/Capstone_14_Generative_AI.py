@@ -1,18 +1,18 @@
-"""LangChain basics demo
+"""Essentials and Applications of Generative AI 
 
-This demo demonstrates core LangChain concepts:
-1. Chat models and LLM wrappers
-2. Chat prompt templates
-3. Output parsers
-4. Basic chains
+This Application allows users to:
+1. Select Desired Prompt Technique
+2. Specify the following:
+    - Bike Style
+    - Discount Plan
+    - Ad Theme
 
 The demo uses Gradio to provide an interactive interface where you can:
 - Try different prompt templates
 - See structured output parsing
-- Experiment with chained operations
 
 Usage:
-    python demos/langchain_patterns/langchain_demo.py
+    python llms-demo-johnb/Capstones/Capstone 14/Capstone_14_Generative_AI.py 
 """
 
 import os
@@ -57,165 +57,7 @@ llamacpp_client = ChatOpenAI(
 
 llamacpp_model = 'gpt-oss-20b'
 
-
-# --- Pydantic models for output parsing ---
-
-class SentimentAnalysis(BaseModel):
-    sentiment: str = Field(description="Overall sentiment: positive, negative, or mixed")
-    confidence: float = Field(description="Confidence score from 0.0 to 1.0")
-    key_phrases: List[str] = Field(description="Important phrases that support the sentiment")
-
-
-class RecipeInfo(BaseModel):
-    name: str = Field(description="Name of the dish")
-    cuisine: str = Field(description="Type of cuisine")
-    ingredients: List[str] = Field(description="List of main ingredients")
-    difficulty: str = Field(description="Difficulty level: easy, medium, or hard")
-
-
-class PersonInfo(BaseModel):
-    name: str = Field(description="Person's full name")
-    age: int = Field(description="Person's age in years")
-    occupation: str = Field(description="Person's job or profession")
-    location: str = Field(description="City or country where person lives")
-
-
 # --- Demo functions ---
-
-def demo_simple_chain(text: str, backend: str) -> tuple[str, str]:
-    """Demo 1: Simple chain with prompt template and string output."""
-
-    llm = ollama_client if backend == 'Ollama' else llamacpp_client
-    
-    # Create a simple prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that explains concepts concisely."),
-        ("human", "Explain {topic} in 2-3 sentences."),
-    ])
-    
-    # Create chain: prompt -> model -> string parser
-    chain = prompt | llm | StrOutputParser()
-    
-    # Execute
-    result = chain.invoke({"topic": text})
-    
-    explanation = f"""**Chain components:**
-    1. Prompt template with system message and variable placeholder
-    2. {backend} chat model
-    3. StrOutputParser (extracts text from AIMessage)
-
-    **Input:** topic = "{text}"
-    """
-    
-    return result, explanation
-
-
-def demo_sentiment_analysis(text: str, backend: str) -> tuple[str, str]:
-    """Demo 2: Chain with structured output (JSON)."""
-
-    llm = ollama_client if backend == 'Ollama' else llamacpp_client
-    
-    # Create output parser
-    parser = JsonOutputParser(pydantic_object=SentimentAnalysis)
-    
-    # Create prompt with format instructions
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are a sentiment analysis expert. Analyze the sentiment of the given text.
-        {format_instructions}"""),
-        ("human", "{text}"),
-    ])
-    
-    # Create chain
-    chain = prompt | llm | parser
-    
-    try:
-        # Execute
-        result = chain.invoke({
-            "text": text,
-            "format_instructions": parser.get_format_instructions()
-        })
-        
-        # Format output
-        output = f"""**Sentiment:** {result['sentiment']}
-        **Confidence:** {result['confidence']:.2%}
-        **Key phrases:**
-        {chr(10).join(f"- {phrase}" for phrase in result['key_phrases'])}"""
-                
-        explanation = f"""**Chain components:**
-        1. Prompt template with format instructions
-        2. {backend} chat model
-        3. JsonOutputParser with Pydantic schema
-
-        **Schema fields:**
-        - sentiment (str): positive/negative/mixed
-        - confidence (float): 0.0 to 1.0
-        - key_phrases (list[str]): Supporting evidence
-        """
-        
-        return output, explanation
-    
-    except Exception as e:
-        return f"Error: {str(e)}", f"An error occurred during parsing. Try a different input or backend."
-
-
-def demo_entity_extraction(text: str, backend: str, entity_type: str) -> tuple[str, str]:
-    """Demo 3: Entity extraction with different schemas."""
-
-    llm = ollama_client if backend == 'Ollama' else llamacpp_client
-    
-    # Choose schema based on entity type
-    if entity_type == "Person":
-        schema = PersonInfo
-
-    elif entity_type == "Recipe":
-        schema = RecipeInfo
-
-    else:
-        return "Invalid entity type", "Please select a valid entity type"
-    
-    parser = JsonOutputParser(pydantic_object=schema)
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """Extract {entity_type} information from the text.
-        {format_instructions}"""),
-        ("human", "{text}"),
-    ])
-    
-    chain = prompt | llm | parser
-    
-    try:
-        result = chain.invoke({
-            "text": text,
-            "entity_type": entity_type.lower(),
-            "format_instructions": parser.get_format_instructions()
-        })
-        
-        # Format output nicely
-        output = "**Extracted information:**\n\n"
-
-        for key, value in result.items():
-            if isinstance(value, list):
-
-                output += f"**{key.replace('_', ' ').title()}:**\n"
-                output += "\n".join(f"- {item}" for item in value) + "\n\n"
-
-            else:
-                output += f"**{key.replace('_', ' ').title()}:** {value}\n"
-        
-        explanation = f"""**Chain components:**
-        1. Prompt template with dynamic entity type
-        2. {backend} chat model
-        3. JsonOutputParser with {entity_type} schema
-
-        **Selected schema:** {entity_type}
-        **Fields:** {', '.join(schema.model_fields.keys())}
-        """
-        
-        return output, explanation
-    
-    except Exception as e:
-        return f"Error: {str(e)}", f"Make sure your text contains {entity_type.lower()} information."
-
 
 def demo_few_shot(text: str, backend: str) -> tuple[str, str]:
     """Demo 4: Few-shot learning with prompt templates."""
@@ -336,7 +178,7 @@ def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
            - Use `<div style="background-color: #FFFDD0; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #0056b3; border-radius: 10px; font-family: Arial, sans-serif;">`
 
         2. **The Header**: 
-           - Use `<div style="background-color: #0056b3; color: #FFFFFF !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">{bike} Adventure</div>`
+           - Use `<div style="background-color: #0056b3; color: #FFFFFF !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">BikeEase: {bike} Adventure</div>`
 
         3. **The Image**: 
            - Use `<img src="https://loremflickr.com/300/200/{bike},bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px;">`
@@ -348,7 +190,7 @@ def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
            - Features container style: `style="clear: both; margin-top: 20px; color: #000000;"`
 
         5. **The Button**: 
-           - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3 !important; color: #FFFFFF !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">Shop Now - {discount_plan} Off</a>`
+           - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3 !important; color: #FFFFFF !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">BikeEase - Shop Now - {discount_plan} Off</a>`
         """)
     ])
     
@@ -418,13 +260,16 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
     gr.Markdown("# 🚲 AI Bicycle Ad Generator")
 
     gr.Markdown("""
-    # LangChain basics demo
-    
-    Explore core LangChain concepts with interactive examples:
-    - **Prompt templates** with variable substitution
-    - **Structured output parsing** with Pydantic schemas
-    - **Basic chains** composing multiple steps
-    - **Few-shot learning** with example-driven prompts
+    # This Application allows users to:
+        1. Select Desired Prompt Technique
+        2. Specify the following:
+            - Bike Style
+            - Discount Plan
+            - Ad Theme
+
+        The demo uses Gradio to provide an interactive interface where you can:
+        - Try different prompt templates
+        - See structured output parsing
     """)
     
     with gr.Row():
@@ -485,20 +330,6 @@ with gr.Blocks(title='Bicycle Advertisement Generator') as AddGenerator:
 
     ad_output = gr.HTML(value=DEFAULT_EMPTY_AD_HTML,
                         label="Generated Advertisement")
-
-    gr.Markdown("""
-    ---
-    
-    ## Key takeaways
-    
-    1. **Prompt templates** make prompts reusable and maintainable
-    2. **Output parsers** extract structured data reliably
-    3. **Chains** compose multiple steps with the `|` operator
-    4. **Pydantic schemas** ensure type-safe structured outputs
-    5. **Few-shot examples** help models learn patterns
-    
-    **Next step:** Try Activity 4 to build your own LangChain chains!
-    """)
 
     # Item is selected in DropDown list box; instructions prompt removed from list
     bike_type.select(fn=clean_bike_list, inputs=None, outputs=[bike_type, error_label])
