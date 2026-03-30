@@ -265,8 +265,8 @@ def demo_few_shot(text: str, backend: str) -> tuple[str, str]:
 ## To limit the scope of what the LLM has to process, I decided to use 
 ## fixed lists for my prompt parameters and options
 
-BIKE_OPTIONS = ['Electric', 'Road', 'City', 'Hybrid', 'Mountain Bike']
-DISCOUNT_OPTIONS = ['Regular Price', 'Customer Loyalty - 10%', 'Spring Sale - 15%', 'Last Years Models - 20%', 'Clearance 30%']
+BIKE_OPTIONS = ['Electric', 'Racing', 'Road', 'City', 'Hybrid', 'Mountain']
+DISCOUNT_OPTIONS = ['Customer Loyalty - 10%', 'Spring Sale - 15%', 'Last Years Models - 20%', 'Clearance 30%']
 THEME_OPTIONS = ['Rugged', 'Sleek', 'Eco-friendly', 'Premium']
 METHOD_OPTIONS = ['Zero-Shot', 'Few-Shot', 'Chain of Thought']
 
@@ -322,13 +322,51 @@ def clean_method_list(evt: gr.SelectData):
     return gr.update(choices=METHOD_OPTIONS), ""
 
 def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
-    return "", f'create_zero_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+    
+    #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_zero_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
+    # Using ChatPromptTemplate with a System Message enforces better "Zero-Shot" behavior
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a professional marketing expert. Output ONLY valid HTML and inline CSS. Every tag MUST have a style attribute."),
+        ("human", """Create a detailed advertisement for a {bike} bike.
+        Theme: {ad_theme}
+        Discount: {discount_plan}
+        
+        Requirements:
+        1. **Outer Wrapper**: 
+           - Use `<div style="background-color: #FFFDD0; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #0056b3; border-radius: 10px; font-family: Arial, sans-serif;">`
+
+        2. **The Header**: 
+           - Use `<div style="background-color: #0056b3; color: #FFFFFF !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">{bike} Adventure</div>`
+
+        3. **The Image**: 
+           - Use `<img src="https://loremflickr.com/300/200/{bike},bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px;">`
+
+        4. **Body & Features**:
+           - Write 4-5 detailed sentences of marketing copy. Style: `style="color: #000000; font-size: 16px; line-height: 1.5;"`
+           - Directly under the sentences, add a `<ul>` list of 4 key features.
+           - Discount style: `<span style="background-color: yellow; font-weight: bold; padding: 2px 5px; border: 1px solid black;">{discount_plan}</span>`
+           - Features container style: `style="clear: both; margin-top: 20px; color: #000000;"`
+
+        5. **The Button**: 
+           - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3 !important; color: #FFFFFF !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">Shop Now - {discount_plan} Off</a>`
+        """)
+    ])
+    
+    # The Chain remains the same
+    chain = prompt | ollama_client | StrOutputParser()
+    
+    # ErrorLabel, <HTML> Ad Content
+    return "", chain.invoke({
+        "bike": bike,
+        "ad_theme": ad_theme,
+        "discount_plan": discount_plan
+    })    
 
 def create_few_shot_ad_prompt(bike, discount_plan, ad_theme):
-    return "", f'create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+    return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
 
 def create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme):
-    return "", f'create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}'
+    return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
 
 def generate_ad_campaign(bike, discount_plan, ad_theme, method):
 
@@ -347,17 +385,22 @@ def generate_ad_campaign(bike, discount_plan, ad_theme, method):
     
     # Call Correct Prompt Creation Function
 
-    match method:
-        case 'Zero-Shot':
-            create_zero_shot_ad_prompt(bike, discount_plan, ad_theme)
-        case 'Few-Shot':
-            create_few_shot_ad_prompt(bike, discount_plan, ad_theme)
-        case 'Chain of Thought':
-            create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme)
+    try:
+        match method:
+            case 'Zero-Shot':
+                return create_zero_shot_ad_prompt(bike, discount_plan, ad_theme)
+            case 'Few-Shot':
+                return create_few_shot_ad_prompt(bike, discount_plan, ad_theme)
+            case 'Chain of Thought':
+                return create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme)
+
+    except Exception as e:
+        # Show exception in error label
+        error_msg = f"<div style='color: red; font-weight: bold;'>⚠️ System Error: {str(e)}</div>"
+        return error_msg, DEFAULT_EMPTY_AD_HTML                
     
     print()
         
-
 
 # Return a tuple of updates in the exact order they appear in 'outputs'
 def reset_input_controls():
