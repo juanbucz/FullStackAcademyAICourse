@@ -31,7 +31,7 @@ load_dotenv()
 
 # --- Configuration ---
 
-temperature = 0.1
+temperature = 0.5
 
 # --- Initialize backends ---
 
@@ -137,6 +137,7 @@ DEFAULT_EMPTY_AD_HTML = """
 </div>
 """
 
+
 ## ======================================================
 ##
 ## Function Definitions
@@ -163,10 +164,137 @@ def clean_method_list(evt: gr.SelectData):
         return gr.update()
     return gr.update(choices=METHOD_OPTIONS), ""
 
-def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
+def create_zero_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str]:
     
     #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_zero_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
     # Using ChatPromptTemplate with a System Message enforces better "Zero-Shot" behavior
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a professional marketing expert. Output ONLY valid HTML and inline CSS. Every tag MUST have a style attribute."),
+        ("human", """Create a detailed advertisement for a {bike} bike.
+        Theme: {ad_theme}
+        Discount: {discount_plan}
+        
+        Requirements:
+        1. **Format**: Output ONLY raw HTML. Do not use markdown (```) or the word 'html'.
+         
+        2. **Thematic Palette**: 
+           - You MUST select a background-color that represents {ad_theme} (e.g., Earthy for Rugged, Charcoal/Dark for Sleek, Green for Eco-friendly).
+           - **CRITICAL**: Set `color: #FFFFFF !important;` for the Outer Wrapper to ensure all text is white and readable on these dark theme colors.
+
+        3. **Outer Wrapper**: 
+           - Use a <div> with the background-color from Rule 2 and white text.
+           - Style: `padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #333; border-radius: 10px; font-family: Arial, sans-serif;`
+
+        4. **The Header**: 
+           - Use `<div style="background-color: #FFFFFF; color: #000000 !important; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px; border: 1px solid #000;">BikeEase: {bike} Adventure</div>`
+
+        5. **Body & Features**:
+           - Write 4-5 marketing sentences strictly using the vocabulary and brand voice of the {ad_theme} theme. 
+           - Use `style="font-size: 16px; line-height: 1.5; color: #FFFFFF;"` to ensure visibility.
+           - Add a `<ul>` list of 4 key features tailored specifically to the {ad_theme} nature of the bike.
+           - Discount: `<span style="background-color: yellow; color: #000000 !important; font-weight: bold; padding: 2px 5px; border: 1px solid black;">{discount_plan}</span>`
+
+        6. **The Button**: 
+           - Use `<a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #FFFFFF !important; color: #000000 !important; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px; border: 2px solid #000;">Shop Now - {discount_plan} Off</a>`
+        """)
+    ])
+    
+    # The Chain remains the same
+    chain = prompt | ollama_client | StrOutputParser()
+
+    # Strip any leading/trailing backticks or 'html' labels before returning
+    result = chain.invoke({
+        "bike": bike, 
+        "ad_theme": ad_theme, 
+        "discount_plan": discount_plan
+    })
+
+    # Cleaning backticks
+    clean_result = result.replace("```html", "").replace("```", "").strip()
+    
+    # ErrorLabel, <HTML> Ad Content
+    return "", clean_result
+
+def create_few_shot_ad_prompt(bike: str, discount_plan: str, ad_theme: str) -> tuple[str, str]:
+
+    #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
+
+    # Few-shot prompt with diverse examples (Rugged, Sleek, and Premium)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a marketing expert. Output ONLY raw HTML. Do not use markdown code blocks or backticks."),
+        
+        # Rugged (Dark/Earth Theme)
+        ("human", "Create a detailed advertisement for a Mountain bike. Theme: Rugged. Discount: 15% Off."),
+        ("ai", """<div style="background-color: #4B3621; color: #FFFFFF; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #333; border-radius: 10px; font-family: Arial, sans-serif;">
+            <div style="background-color: #FFFFFF; color: #000000; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">BikeEase: Mountain Adventure</div>
+            <img src="https://loremflickr.com/300/200/Mountain,bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px;">
+            <div style="font-size: 16px; line-height: 1.5; color: #FFFFFF; clear: both;">
+                <p>Conquer the toughest trails with the **unyielding** performance of our Mountain bike. Built with a **heavy-duty** frame for **all-terrain** dominance, this machine is truly **rugged**.</p>
+                <ul>
+                    <li>Reinforced Steel Frame</li>
+                    <li>Aggressive Knobby Tires</li>
+                    <li>Dual-Suspension System</li>
+                    <li>15% Off Discount Applied</li>
+                </ul>
+            </div>
+            <a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3; color: #ffffff; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">Shop Now</a>
+        </div>"""),
+
+        # Sleek (Light/Modern Theme)
+        ("human", "Create a detailed advertisement for a Road bike. Theme: Sleek. Discount: 10% Off."),
+        ("ai", """<div style="background-color: #F0F0F0; color: #333333; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #0056b3; border-radius: 10px; font-family: Arial, sans-serif;">
+            <div style="background-color: #0056b3; color: #FFFFFF; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">BikeEase: Road Adventure</div>
+            <img src="https://loremflickr.com/300/200/Road,bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px;">
+            <div style="font-size: 16px; line-height: 1.5; color: #333333; clear: both;">
+                <p>Experience **precision** engineering and **minimalist** design. Our Road bike offers an **aerodynamic** profile for a **smooth**, high-speed commute.</p>
+                <ul>
+                    <li>Ultra-light Carbon Frame</li>
+                    <li>Integrated Cable Routing</li>
+                    <li>High-Pressure Slick Tires</li>
+                    <li>10% Off Limited Offer</li>
+                </ul>
+            </div>
+            <a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #0056b3; color: #ffffff; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">Shop Now</a>
+        </div>"""),
+
+        # Premium (Luxury/Black & Gold Theme)
+        ("human", "Create a detailed advertisement for a Cruiser bike. Theme: Premium. Discount: 5% Off."),
+        ("ai", """<div style="background-color: #000000; color: #D4AF37; padding: 25px; max-width: 600px; margin: 0 auto; border: 2px solid #D4AF37; border-radius: 10px; font-family: 'Times New Roman', serif;">
+            <div style="background-color: #D4AF37; color: #000000; font-size: 28px; font-weight: bold; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 20px;">BikeEase: Exclusive Cruiser</div>
+            <img src="https://loremflickr.com/300/200/Cruiser,bicycle" style="float: left; width: 220px; margin: 0 20px 10px 0; border-radius: 5px; border: 1px solid #D4AF37;">
+            <div style="font-size: 16px; line-height: 1.5; color: #D4AF37; clear: both;">
+                <p>Indulge in **unrivaled** luxury with our **bespoke** Cruiser. Every detail is meticulously crafted for the **sophisticated** rider who demands **elegant** aesthetics and superior comfort.</p>
+                <ul>
+                    <li>Hand-Stitched Leather Accents</li>
+                    <li>Polished Chrome Finish</li>
+                    <li>Silent-Drive Technology</li>
+                    <li>Exclusive 5% Member Invitation</li>
+                </ul>
+            </div>
+            <a href="#" style="display: block; width: 250px; margin: 20px auto 0; background-color: #D4AF37; color: #000000; font-size: 20px; font-weight: bold; padding: 15px; text-align: center; text-decoration: none; border-radius: 5px;">Reserve Yours</a>
+        </div>"""),
+
+        # The Actual Request
+        ("human", "Create a detailed advertisement for a {bike} bike. Theme: {ad_theme}. Discount: {discount_plan}."),
+    ])
+    
+    chain = prompt | llm | StrOutputParser()
+    
+    result = chain.invoke({
+        "bike": bike, 
+        "ad_theme": ad_theme, 
+        "discount_plan": discount_plan
+    })
+
+    # Cleaning backticks
+    clean_result = result.replace("```html", "").replace("```", "").strip()
+    
+    return "", clean_result
+
+def create_few_shot_ad_prompt1(bike, discount_plan, ad_theme):
+   
+    #return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a professional marketing expert. Output ONLY valid HTML and inline CSS. Every tag MUST have a style attribute."),
         ("human", """Create a detailed advertisement for a {bike} bike.
@@ -203,9 +331,6 @@ def create_zero_shot_ad_prompt(bike, discount_plan, ad_theme):
         "ad_theme": ad_theme,
         "discount_plan": discount_plan
     })    
-
-def create_few_shot_ad_prompt(bike, discount_plan, ad_theme):
-    return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_few_shot_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
 
 def create_chain_of_thought_ad_prompt(bike, discount_plan, ad_theme):
     return "", f"<span style='color: green; font-weight: bold; font-size: 22px;'>⚠️ create_chain_of_thought_ad_prompt -- bike: {bike},  discount_plan: {discount_plan}, ad_theme: {ad_theme}</span>"
