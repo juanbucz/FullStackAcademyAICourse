@@ -57,48 +57,6 @@ llamacpp_client = ChatOpenAI(
 
 llamacpp_model = 'gpt-oss-20b'
 
-# --- Demo functions ---
-
-def demo_few_shot(text: str, backend: str) -> tuple[str, str]:
-    """Demo 4: Few-shot learning with prompt templates."""
-
-    llm = ollama_client if backend == 'Ollama' else llamacpp_client
-    
-    # Few-shot prompt with examples
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a text style classifier. Classify the writing style as: technical, casual, formal, or creative."),
-        ("human", "The efficacy of the proposed methodology was validated through rigorous experimental procedures."),
-        ("ai", "technical"),
-        ("human", "Hey! Just wanted to say this app is super cool and easy to use."),
-        ("ai", "casual"),
-        ("human", "We are pleased to inform you that your application has been approved."),
-        ("ai", "formal"),
-        ("human", "The moonlight danced across the waves like silver ribbons weaving through the night."),
-        ("ai", "creative"),
-        ("human", "{text}"),
-    ])
-    
-    chain = prompt | llm | StrOutputParser()
-    
-    result = chain.invoke({"text": text})
-    
-    explanation = """**Chain components:**
-    1. Prompt template with 4 few-shot examples
-    2. Chat model (learns from examples)
-    3. StrOutputParser
-
-    **Few-shot examples:**
-    - Technical: "efficacy", "methodology", "validated"
-    - Casual: "Hey!", "super cool", informal language
-    - Formal: "We are pleased", official tone
-    - Creative: Metaphors, descriptive language
-
-    The model learns the pattern from examples!
-    """
-    
-    return result.strip(), explanation
-
-
 # --- Build Gradio UI ---
 
 ## ======================================================
