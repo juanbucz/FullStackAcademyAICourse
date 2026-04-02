@@ -41,6 +41,9 @@ from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from sqlalchemy import create_engine
 
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from langchain_huggingface import HuggingFacePipeline
+
 # Add src directory to path so relative ingestor imports work
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -74,12 +77,23 @@ vector_store = Chroma(
 
 # ---------------------------------------------------------------------------
 # LLM backends - For simplicity sake, use local ChatOllama and instantiate client
+#                
 # ---------------------------------------------------------------------------
 
 ollama_model = "qwen2.5:3b"
 ollama_client = ChatOllama(model=ollama_model, temperature=temperature)
 
-llamacpp_model = "gpt-oss-20b"
+huggingface_model = "Qwen/Qwen2.5-3B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(huggingface_model)
+model = AutoModelForCausalLM.from_pretrained(huggingface_model)
+
+hf_pipeline = pipeline(
+                        "text-generation",
+                        model=model,
+                        tokenizer=tokenizer,
+                        max_new_tokens=512,
+                        temperature=temperature,
+                    )
 
 # ---------------------------------------------------------------------------
 # Ingestor registry
@@ -92,7 +106,7 @@ INGESTORS = {
 RAG_PROMPT = ChatPromptTemplate.from_messages([
     (
         "system",
-        "You are a helpful assistant. Answer the question using only the "
+        "You are a helpful human resources assistant. Answer the question using only the "
         "provided context. If the context does not contain enough information "
         "to answer, say so honestly.\n\n"
         "Context:\n{context}",
@@ -208,13 +222,15 @@ def ingest_documents(file_path: str) -> str:
     )
 
 
-# Query Rag - remove references to backend selector since we are hardwired
-#             to use ollama_client
-def query_rag(question: str, k: int) -> tuple[str, str]:
+# Query Rag - backend_selector will give us either ollama or huggingface transformers
+#
+def query_rag(question: str, backend: str, k: int) -> tuple[str, str]:
     """Retrieve relevant chunks and generate a grounded answer."""
 
     if not question.strip():
         return "Please enter a question.", ""
+    
+    llm = ollama_client if backend == "Ollama" else HuggingFacePipeline(pipeline=hf_pipeline)
 
     retriever = vector_store.as_retriever(search_kwargs={"k": int(k)})
 
@@ -230,7 +246,7 @@ def query_rag(question: str, k: int) -> tuple[str, str]:
     chain = (
         {"context": lambda _: _format_docs(retrieved_docs), "question": RunnablePassthrough()}
         | RAG_PROMPT
-        | ollama_client
+        | llm
         | StrOutputParser()
     )
 
@@ -361,13 +377,13 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
             """)
 
             with gr.Row():
-                # Remove backend selector since we are hardwired to use ollama_clkient
-                # backend_selector = gr.Radio(
-                #     choices=["Ollama", "llama.cpp"],
-                #     value="llama.cpp",
-                #     label="Model backend",
-                #     info=f"Ollama: {ollama_model} | llama.cpp: {llamacpp_model} @ {llamacpp_base_url}",
-                # )
+                # Choose between Ollama and HuggingFace Transformer
+                backend_selector = gr.Radio(
+                    choices=["Ollama", "HuggingFace Transformers"],
+                    value="Ollama",
+                    label="Model backend",
+                    info=f"Ollama: {ollama_model} | HuggingFace Transformers: {huggingface_model}",
+                )
                 k_slider = gr.Slider(
                     minimum=1,
                     maximum=10,
@@ -394,7 +410,7 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
 
             ask_btn.click(
                 fn=query_rag,
-                inputs=[question_input, k_slider],
+                inputs=[question_input, backend_selector, k_slider],
                 outputs=[answer_output, sources_output],
             )
 
@@ -407,11 +423,10 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
     |-----------|------|
     | `HuggingFaceEmbeddings` | Turns text into vectors (numbers) that capture meaning |
     | `PGVector` | Stores vectors in ChromaDB; finds nearest neighbours fast |
-    | `WikipediaIngestor` | Loads + chunks Wikipedia articles |
+    | `PDFIngestor` | Loads + chunks a PDF document |
     | Retriever | Finds the *k* most similar chunks to the question |
     | RAG chain | Injects retrieved chunks as context into the LLM prompt |
 
-    **Next step:** Try Activity 5 to add new document sources!
     """)
 
 
