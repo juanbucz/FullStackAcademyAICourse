@@ -7,11 +7,11 @@ Any changes/derivations from the base demo are commented
 RAG Knowledge System demo
 
 This demo shows how to build a Retrieval-Augmented Generation (RAG) pipeline:
-1. **Ingest** - load documents from a source, embed them, store in pgvector
+1. **Ingest** - load documents from a source, embed them, store in ChromaDB
 2. **Query** - retrieve relevant chunks and pass them as context to an LLM
 
 Architecture:
-    Source → Ingestor → Embeddings → PGVector
+    Source → Ingestor → Embeddings → ChromaDB
                                         ↓
                           Question → Retriever → Context → Prompt → LLM → Answer
 
@@ -37,9 +37,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
-from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
-from sqlalchemy import create_engine
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from langchain_huggingface import HuggingFacePipeline
@@ -114,6 +112,10 @@ RAG_PROMPT = ChatPromptTemplate.from_messages([
     ("human", "{question}"),
 ])
 
+QUESTION_PLACEHOLDER='e.g. What is the employee training policy?'
+
+DEFAULT_ANSWER_PLACEHOLDER = 'Please enter a question. Make sure to ingest the Nestles HR Policy PDF first.'
+
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -141,10 +143,10 @@ def _format_sources(docs) -> str:
 # ---------------------------------------------------------------------------
 
 def ingest_documents(file_path: str) -> str:
-    """Load documents from the selected source and store them in pgvector."""
+    """Load documents from the selected source and store them in ChromaDB."""
 
     if not file_path.strip():
-        return "Please enter a valid Nestle HR PDF Document"
+        return "Please enter a valid Nestles HR PDF Document"
 
     ingestor = INGESTORS['PDF']
 
@@ -155,7 +157,7 @@ def ingest_documents(file_path: str) -> str:
         return f"Error loading document: {e}"
 
     if not doc:
-        return "No document found for that topic."
+        return "Document was not found or could not successfully loaded and chunked."
 
     try:
         vector_store.add_documents(chunks)
@@ -228,7 +230,7 @@ def query_rag(question: str, backend: str, k: int) -> tuple[str, str]:
     """Retrieve relevant chunks and generate a grounded answer."""
 
     if not question.strip():
-        return "Please enter a question.", ""
+        return DEFAULT_ANSWER_PLACEHOLDER, ""
     
     llm = ollama_client if backend == "Ollama" else HuggingFacePipeline(pipeline=hf_pipeline)
 
@@ -280,8 +282,16 @@ def clear_collection() -> tuple[str, any]:
         return "Collection cleared. Ready for new ingestion.", gr.update(value=None)
 
     except Exception as e:
-        return f"Error clearing collection: {e}"
+        return f"Error clearing collection: {e}", gr.update(value=None)
+    
+def clear_question_and_results() -> tuple[str, str, str]:
+    """Delete/Clear question, results and listed sources from form - Reset the form."""
 
+    question_input.placeholder=QUESTION_PLACEHOLDER
+    answer_output.placeholder=DEFAULT_ANSWER_PLACEHOLDER
+
+    return '', '',  gr.update(value=None)
+    
 
 # ---------------------------------------------------------------------------
 # Gradio UI
@@ -296,7 +306,7 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
     grounded in the ingested content.
 
     **How it works:**
-    1. **Ingest** - search Nestles HR document by topic, chunk the articles, embed and store them
+    1. **Ingest** - "chunks" the document, embed and stores it on disk in ChromaDB
     2. **Query** - your question retrieves the most relevant chunks, which the LLM uses to answer
     """)
 
@@ -307,19 +317,14 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
         # ------------------------------------------------------------------
         with gr.Tab("1. Ingest documents"):
             ingest_instructions = gr.Markdown("""
-            Type a Nestles HR topic to fetch and store relevant data in the knowledge base.
-            You can ingest multiple topics - they accumulate in the same collection.
+            Upload the Nestles HR Policy PDF to build the knowledge base.
+            The document will be split into chunks, embedded, and stored in ChromaDB for querying.
             """)
 
             with gr.Row():
                 with gr.Column():
-                    topic_input = gr.Textbox(
-                        label="Nestles HR topic",
-                        placeholder="e.g. Policy on Conditions of Work and Employment",
-                        value="Policy on Conditions of Work and Employment",
-                    )
 
-                    gr.Markdown("Select a Nestlé HR Policy PDF document to ingest.")
+                    gr.Markdown("Select a Nestles HR Policy PDF document to ingest.")
                     document_source = gr.File(
                         label="Upload Nestles HR Policy PDF",
                         #value="./the_nestle_hr_policy_pdf_2012.pdf",   -- Preloading with value changes this "from open" to "file save"; go figure
@@ -334,27 +339,6 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
 
                 with gr.Column():
                     ingest_status = gr.Textbox(label="Status", lines=4, interactive=False)
-
-            # Update label/placeholder/instructions when ingestor selection changes
-            _SOURCE_META = {
-                "Wikipedia": (
-                    "Wikipedia topic",
-                    "e.g. Python programming language",
-                    "Type a Wikipedia topic to fetch and store articles in the knowledge base.\n"
-                    "You can ingest multiple topics - they accumulate in the same collection.",
-                ),
-                # Students: add entries here to customise label/placeholder/description per ingestor
-            }
-
-            def _update_source_ui(ingestor_name):
-                meta = _SOURCE_META.get(
-                    ingestor_name,
-                    (ingestor_name + " source", "", "Enter the source for " + ingestor_name + ".")
-                )
-                return (
-                    gr.update(label=meta[0], placeholder=meta[1]),
-                    gr.update(value=meta[2]),
-                )
 
             ingest_btn.click(
                 fn=ingest_documents,
@@ -392,18 +376,22 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
                     label="Chunks to retrieve (k)",
                     info="More chunks = more context, but slower and more expensive.",
                 )
-
+                
             with gr.Row():
                 with gr.Column():
                     question_input = gr.Textbox(
                         label="Question",
-                        placeholder="e.g. What is Python used for?",
+                        placeholder=QUESTION_PLACEHOLDER,
                         lines=3,
                     )
                     ask_btn = gr.Button("Ask", variant="primary")
+                    clear_question_btn = gr.Button("Clear Question and Results", variant="stop")
 
                 with gr.Column():
-                    answer_output = gr.Markdown(label="Answer")
+                    answer_output = gr.Textbox(
+                        label="Answer",
+                        placeholder=DEFAULT_ANSWER_PLACEHOLDER,
+                        interactive=False)
 
             with gr.Accordion("Sources", open=False):
                 sources_output = gr.Textbox(label="Retrieved chunks", lines=12, interactive=False)
@@ -414,6 +402,12 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
                 outputs=[answer_output, sources_output],
             )
 
+            clear_question_btn.click(
+                fn=clear_question_and_results,
+                inputs=[],
+                outputs=[question_input, answer_output, sources_output],
+            )            
+
     gr.Markdown("""
     ---
 
@@ -422,7 +416,7 @@ with gr.Blocks(title="Nestles HR Document RAG System") as demo:
     | Component | Role |
     |-----------|------|
     | `HuggingFaceEmbeddings` | Turns text into vectors (numbers) that capture meaning |
-    | `PGVector` | Stores vectors in ChromaDB; finds nearest neighbours fast |
+    | `ChromaDB` | Stores vectors locally on disk; finds nearest neighbours fast |
     | `PDFIngestor` | Loads + chunks a PDF document |
     | Retriever | Finds the *k* most similar chunks to the question |
     | RAG chain | Injects retrieved chunks as context into the LLM prompt |
