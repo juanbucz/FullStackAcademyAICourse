@@ -1,0 +1,23 @@
+1. Pantry-to-Recipe Vision System (Your Whimsical Idea, Done Right)
+
+Dataset:
+    •    Open Images Dataset (food categories)
+    •    Recipe1M dataset (public academic dataset)
+    •    Food-101 dataset
+
+Project:
+    •    Step 1: Use object detection to identify ingredients from pantry/fridge photos
+    •    Step 2: Map detected ingredients to a recipe database
+    •    Step 3: Rank recipes by ingredient coverage
+
+Core ML:
+    •    Pretrained object detection (YOLOv8 or similar)
+    •    Multi-label classification
+    •    Similarity ranking
+
+Stretch Goal:
+    •    Suggest substitutions
+    •    Optimize for minimal missing ingredients
+
+Why it’s strong:
+Combines computer vision + NLP + ranking + UX.

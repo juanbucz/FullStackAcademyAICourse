@@ -1,0 +1,32 @@
+{
+	"name": "Pantry-to-Recipe Universal (sm_120)",
+	// Using the 2026 NGC image: Optimized for Blackwell and backward compatible
+	"image": "nvcr.io/nvidia/pytorch:26.03-py3",
+	"runArgs": [
+		"--gpus", "all",
+		"--ipc=host",
+		"--shm-size=8gb", // Critical for YOLO training stability
+		"--ulimit", "memlock=-1",
+		"--ulimit", "stack=67108864"
+	],
+	"containerEnv": {
+		// Supports Blackwell (12.0), Lovelace (8.9), and older Pascal (6.1)
+		"TORCH_CUDA_ARCH_LIST": "6.1;8.9;12.0",
+		"PYTHONPATH": "${containerWorkspaceFolder}"
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/bin/python",
+				"remote.autoForwardPorts": true
+			},
+			"extensions": [
+				"ms-python.python",
+				"ms-toolsai.jupyter",
+				"streetsidesoftware.code-spell-checker"
+			]
+		}
+	},
+	"postCreateCommand": "mkdir -p logs models data ingredients && pip install -r requirements.txt",
+	"forwardPorts": [7860, 8501]
+}
