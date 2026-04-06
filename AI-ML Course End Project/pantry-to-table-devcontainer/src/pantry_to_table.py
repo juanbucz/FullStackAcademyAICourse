@@ -144,6 +144,15 @@ def download_ingredient_images() -> str:
     results = su.download_ingredient_images()
     return results, __ingredient_gallery_items, __ingredient_gallery_items
 
+def reset_selected_ingredients() -> tuple[str, any]:
+    """Reset/Clear the selected Spoonacular Ingredients."""
+    global __current_ingredients, __current_ingredient_gallery_items
+
+    __current_ingredients = []
+    __current_ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
+
+    return __current_ingredient_gallery_items, __current_ingredient_gallery_items
+
 def clear_ingredients() -> tuple[str, any]:
     """Delete all the loaded Spoonacular Ingredients."""
     print()
@@ -196,13 +205,13 @@ def parse_recipe_details(json_data):
     
     # CRITICAL: Convert to Absolute Path for Gradio's 'file/' protocol
     abs_path = os.path.abspath(local_img_path)
-    file_exists = os.path.exists(abs_path)
 
     # Debug check: This will show in your terminal
-    if file_exists:
-        print(f"✅ Image found for UI: {abs_path}")
-    else:
-        print(f"❌ Image missing for UI: {abs_path}")
+    #file_exists = os.path.exists(abs_path)    
+    # if file_exists:
+    #     print(f"Image found for UI: {abs_path}")
+    # else:
+    #     print(f"Image missing for UI: {abs_path}")
 
     # Use gr.HTML instead of Markdown to prevent protocol stripping
     # header_html = f"""
@@ -216,7 +225,7 @@ def parse_recipe_details(json_data):
     # """
     image_url = json_data.get('image', '')
     
-    header_markdown = f"# {raw_title}\n<img src='{local_img_path}' width='100%'>"    
+    header_markdown = f'<h2>📜 {raw_title}</h2>'
 
     # 2. Extract Metadata
     source = json_data.get('sourceName', 'N/A')
@@ -224,7 +233,12 @@ def parse_recipe_details(json_data):
     price = round(json_data.get('pricePerServing', 0) / 100, 2) # Cents to Dollars
 
     # 3. Dish Types & Summary
-    dish_types = {dt: 1.0 for dt in json_data.get('dishTypes', [])}
+    dish_list = json_data.get('dishTypes', [])
+    if dish_list:
+        dish_types = ", ".join([dt.replace("_", " ").title() for dt in dish_list])
+    else:
+        dish_types = "None specified"
+
     summary = json_data.get('summary', 'No summary available.')
 
     # 4. Ingredients & Instructions
@@ -233,13 +247,25 @@ def parse_recipe_details(json_data):
     instructions = json_data.get('instructions', "No instructions provided.")
 
     # 5. Wine, Cuisines, and Diets
-    wine_list = json_data.get('winePairing', {}).get('pairedWines', [])
-    wine_text = ", ".join(wine_list) if wine_list else "None suggested"
+    # Access the winePairing dictionary safely
+    wine_pairing_data = json_data.get('winePairing', {})
+
+    # Extract only the list of specific wine names
+    wine_list = wine_pairing_data.get('pairedWines', [])
+
+    # Format the list into a clean, capitalized string
+    if wine_list:
+        # This uses .title() to turn 'chardonnay' into 'Chardonnay'
+        wine_text = ", ".join([wine.title() for wine in wine_list])
+    else:
+        wine_text = "None suggested"    
     cuisines_text = ", ".join(json_data.get('cuisines', []))
     diets_text = ", ".join(json_data.get('diets', []))
 
     # 6. Taste Profile & Nutrition
-    taste_data = json_data.get('taste', {})
+    # Scale values by 100 so '100' becomes '1.0' (100%)
+    taste_raw = json_data.get('taste', {})
+    taste_data = {k: v / 100 for k, v in taste_raw.items()}
     
     nutrients = json_data.get('nutrition', {}).get('nutrients', [])
     key_macros = [n for n in nutrients if n['name'] in ['Calories', 'Fat', 'Carbohydrates', 'Protein']]
@@ -250,8 +276,8 @@ def parse_recipe_details(json_data):
 
     return (
         header_markdown, source, score, price, dish_types, summary, 
-        ingredients_text, instructions, wine_text, cuisines_text, 
-        taste_data, diets_text, nutrition_text
+        ingredients_text, abs_path,instructions, wine_text, 
+        cuisines_text, taste_data, diets_text, nutrition_text
     )
 
 def load_recipe_details(recipe_id, recipe_name) -> tuple[str, any]:
@@ -261,9 +287,37 @@ def load_recipe_details(recipe_id, recipe_name) -> tuple[str, any]:
     recipe_details = su.current_recipe_details
     return parse_recipe_details(recipe_details)
 
-def clear_recipes() -> tuple[str, any]:
-    """Delete all the loaded Spoonacular recipes."""
-    print()
+def clear_recipes_ui():
+    """Resets the entire Recipe Management tab state and UI components."""
+
+    # 1. Reset Global State
+    global __current_recipes, __recipe_gallery_items, __recipes_id_map
+    __current_recipes = []
+    __recipe_gallery_items = [__DEFAULT_LOADING_RECIPES]
+    __recipes_id_map = {}
+
+    # 2. Reset Galleries & Status
+    gallery_reset = __DEFAULT_LOADING_RECIPES # For the recipe list
+    status_text = "Recipes cleared. Please select ingredients and load again."
+    
+    # 3. Reset Recipe Selection Summary (Center Panel)
+    summary_reset = ["", 0, 0, "", 0, "", None, None] # title, likes, missing count/list, unused count/list, state IDs
+    
+    # 4. Reset Recipe Detail Panel (Right Panel)
+    detail_title_reset = "<h2>📜 Select a Recipe to See Details</h2>"
+    detail_meta_reset = ["", 0, 0, "", ""] # source, score, price, dish types, summary
+    detail_body_reset = ["", None, ""]     # ingredients, image, instructions
+    detail_footer_reset = ["", "", {}, "", ""] # wine, cuisines, taste (dict), diets, nutrition
+    
+    # Combine all into one return list
+    return (
+        [gallery_reset, status_text] + 
+        summary_reset + 
+        [detail_title_reset] + 
+        detail_meta_reset + 
+        detail_body_reset + 
+        detail_footer_reset
+    )
     
 # ───────────────────────────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
@@ -439,12 +493,6 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 outputs=[ingredient_load_status, ingredients_gallery],
             )            
 
-            clear_ingredients_btn.click(
-                fn=clear_ingredients,
-                inputs=[],
-                outputs=[ingredient_load_status],
-            )
-
         # ------------------------------------------------------------------
         # Tab 2: Query
         # ------------------------------------------------------------------
@@ -466,7 +514,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         download_recipe_images_btn = gr.Button("Download Spoonacular Recipe Images", variant="primary")
                         with gr.Column(min_width=150):
                             load_recipe_button = gr.Button("Load Selected Recipe", variant="primary")
-                            clear_recipes_btn = gr.Button("Clear All Recipes", variant="stop")
+                            clear_recipes_btn = gr.Button("Clear All Recipe Data", variant="stop")
 
                     gr.Markdown("### 📝 Available Recipe Selection")
 
@@ -534,18 +582,29 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                             detail_score = gr.Number(label="Spoonacular Score", interactive=False)
                             detail_price = gr.Number(label="Price Per Serving ($)", interactive=False)
                         
-                        detail_dishtypes = gr.Label(label="Dish Types")
+                        detail_dishtypes = gr.Textbox(label="Dish Types", interactive=False, lines=3)
                         detail_summary = gr.HTML(label="Summary") # Summary contains HTML tags
                         
                         # Ingredients & Instructions
                         with gr.Row():
-                            detail_extended_ingredients = gr.Textbox(
-                                label="Extended Ingredients", 
-                                lines=10, 
-                                max_lines=15, 
-                                interactive=False
-                            )
-                            detail_instructions = gr.Markdown(label="Cooking Instructions")
+                            with gr.Column(scale=2):
+                                    detail_extended_ingredients = gr.Textbox(
+                                        label="Extended Ingredients", 
+                                        lines=10, 
+                                        max_lines=15, 
+                                        interactive=False
+                                    )
+                                
+                            # NEW: Add the image here, to the right of ingredients
+                            with gr.Column(scale=2):
+                                detail_recipe_image = gr.Image(
+                                    label="Recipe Image", 
+                                    show_label=False, 
+                                    interactive=False,
+                                    elem_id="recipe_main_img"
+                                )
+
+                        detail_instructions = gr.Markdown(label="Cooking Instructions")
 
                         # Wine & Meta
                         with gr.Row():
@@ -554,9 +613,12 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         
                         # Taste, Diets, and Nutrition
                         with gr.Row():
-                            detail_taste = gr.Label(label="Taste Profile")
-                            detail_diets = gr.Textbox(label="Diets", interactive=False)
-                            detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
+                            with gr.Column(scale=2, min_width=200):
+                                detail_taste = gr.Label(label="Taste Profile")
+                            with gr.Column(scale=1, min_width=140):
+                                detail_diets = gr.Textbox(label="Diets", interactive=False)
+                            with gr.Column(scale=2, min_width=350):    
+                                detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
 
             def toggle_selected_ingredient(data: gr.SelectData):
                 global __current_ingredients, __current_ingredient_gallery_items, __ingredient_gallery_items
@@ -621,16 +683,49 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 inputs=[selected_recipe_id, selected_recipe_name],
                 outputs=[
                     detail_title, detail_source, detail_score, detail_price, 
-                    detail_dishtypes, detail_summary, detail_extended_ingredients, 
-                    detail_instructions, detail_wine, detail_cuisines, 
-                    detail_taste, detail_diets, detail_nutrition
+                    detail_dishtypes, detail_summary, 
+                    detail_extended_ingredients, 
+                    detail_recipe_image,
+                    detail_instructions, 
+                    detail_wine, detail_cuisines, 
+                    detail_taste, detail_diets, 
+                    detail_nutrition
                 ]
             )         
 
-            clear_recipes_btn.click(
-                fn=clear_recipes,
+            reset_ingredients_btn.click(
+                fn=reset_selected_ingredients,
+                inputs=[],
+                outputs=[recipe_ingredients_gallery, selected_ingredients_gallery]
+            )
+
+            clear_ingredients_btn.click(
+                fn=clear_ingredients,
                 inputs=[],
                 outputs=[ingredient_load_status],
+            )            
+
+            clear_recipes_btn.click(
+                fn=clear_recipes_ui,
+                inputs=[],
+                outputs=[
+                    # Galleries & Status
+                    recipe_gallery, recipe_load_status,
+                    
+                    # Center Summary Panel
+                    recipe_title_display, recipe_likes_display, 
+                    missing_count_display, missing_ingredients_list, 
+                    unused_count_display, unused_ingredients_list,
+                    selected_recipe_id, selected_recipe_name,
+                    
+                    # Right Detail Panel
+                    detail_title, 
+                    detail_source, detail_score, detail_price, 
+                    detail_dishtypes, detail_summary, 
+                    detail_extended_ingredients, detail_recipe_image, detail_instructions, 
+                    detail_wine, detail_cuisines, 
+                    detail_taste, detail_diets, detail_nutrition
+                ]
             )
 
             def on_recipe_select(data: gr.SelectData):
@@ -676,6 +771,9 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
             )            
 
 
+
 if __name__ == "__main__":
-    # Add allowed_paths to let Gradio bypass the security sandbox
-    pantry_to_table.launch(allowed_paths=["recipes_images", "recipes_scaled_images"])
+    # Add your specific image directories to the allowed_paths list
+    pantry_to_table.launch(
+        allowed_paths=["recipes_images", "recipes_scaled_images", "ingredients_images", "assets"]
+    )
