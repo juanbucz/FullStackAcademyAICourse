@@ -166,7 +166,11 @@ class utilities:
 
     @staticmethod    
     def scale_image(input_path, output_path, size=(300, 300)):
-        with Image.open(input_path) as img:
-            # 'Resampling.LANCZOS' provides the highest quality downscaling
-            scaled_img = img.resize(size, Image.Resampling.LANCZOS)
-            scaled_img.save(output_path)         
+
+        try:
+            with Image.open(input_path) as img:
+                # 'Resampling.LANCZOS' provides the highest quality downscaling
+                scaled_img = img.resize(size, Image.Resampling.LANCZOS)
+                scaled_img.save(output_path)         
+        except Exception as e:
+            print(f'Error scaling {input_path}: {e}')  

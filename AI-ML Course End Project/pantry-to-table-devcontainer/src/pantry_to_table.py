@@ -31,7 +31,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from utilities.utilities import utilities as utils
-from utilities.spoontacular_utilities import spoontacular_utilities as su
+from utilities.spoonacular_utilities import spoonacular_utilities as su
 
 os.environ['TF_USE_LEGACY_KERAS'] = '1'    # must be first
 
@@ -61,6 +61,8 @@ load_dotenv()
 __DEFAULT_LOADING_INGREDIENTS = ("assets/loading.png", "Waiting to Load Ingredients...")
 __DEFAULT_LOADING_RECIPES     = ("assets/loading.png", "Waiting to Load Recipes...")
 
+__RECIPES_SCALED_IMAGE_DIR = 'recipes_scaled_images'
+
 # ---------------------------------------------------------------------------
 # Create Default Gallery Image once instead of every time from URL
 # ---------------------------------------------------------------------------
@@ -79,15 +81,17 @@ def create_placeholder():
 # Configuration
 # ---------------------------------------------------------------------------
 __loaded_ingredients = []
+__current_ingredients = []
 __current_recipes = []
 
 create_placeholder()
 __ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
 __current_ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
 
-__current_recipe_gallery_items =[__DEFAULT_LOADING_RECIPES]
+__recipe_gallery_items =[__DEFAULT_LOADING_RECIPES]
 
-__ingredient_id_map = {}
+__ingredients_id_map = {}
+__recipes_id_map = {}
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -115,24 +119,24 @@ def _format_sources(docs) -> str:
 # ---------------------------------------------------------------------------
 
 def load_ingredients() -> str:
-    """Call the Spoontacular API to load the ingredients."""
-    global __loaded_ingredients, __ingredient_gallery_items, __ingredient_id_map
+    """Call the Spoonacular API to load the ingredients."""
+    global __loaded_ingredients, __ingredient_gallery_items, __ingredients_id_map
 
-    results = su.load_spoontacular_ingredients()
+    results = su.load_Spoonacular_ingredients()
 
     # Load ingredients for display/selection
     __loaded_ingredients = su.all_ingredients
 
     # For 'List Box'
-    __ingredient_gallery_items = [(f"pantry_images/{item['image']}", item['name']) for item in __loaded_ingredients]
+    __ingredient_gallery_items = [(f"ingredients_images/{item['image']}", item['name']) for item in __loaded_ingredients]
 
     # For retrieving ingredient ID
-    __ingredient_id_map = {index: item['id'] for index, item in enumerate(__loaded_ingredients)}
+    __ingredients_id_map = {index: item['id'] for index, item in enumerate(__loaded_ingredients)}
 
     return results
 
 def download_ingredient_images() -> str:        
-    """Download the ingredient images from Spoontacular"""
+    """Download the ingredient images from Spoonacular"""
     global __ingredient_gallery_items
 
     results = su.download_ingredient_images()
@@ -144,22 +148,28 @@ def clear_ingredients() -> tuple[str, any]:
 
 
 def get_recipes() -> str:
-    """Call the Spoontacular API to load the recipes."""
-    global __current_recipes, __loaded_ingredients
+    """Call the Spoonacular API to load the recipes."""
+    global __current_ingredients, __current_recipes, __recipe_gallery_items, __recipes_id_map
 
-    results = su.load_spoontacular_recipes(__loaded_ingredients)
+    results = su.load_Spoonacular_recipes(__current_ingredients)
 
     # Load ingredients for display/selection
     __current_recipes = su.current_recipes
 
+    # For 'List Box'
+    __recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
+
+    # For retrieving ingredient ID
+    __recipes_id_map = {index: item['id'] for index, item in enumerate(__current_recipes)}       
+
     return results 
 
 def download_recipe_images() -> str:        
-    """Download the recipe images from Spoontacular"""
-    global __ingredient_gallery_items
+    """Download the recipe images from Spoonacular"""
+    global __recipe_gallery_items
 
     results = su.download_recipe_images()
-    return results, __current_recipe_gallery_items
+    return results, __recipe_gallery_items
 
 def load_recipe() -> tuple[str, any]:
     """Load recipe details for the selected Spoonacular recipe."""
@@ -298,8 +308,8 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 with gr.Column():
 
                     with gr.Row():
-                        load_ingredients_btn = gr.Button("Load Spoontacular Ingredients", variant="primary")
-                        download_ingredient_images_btn = gr.Button("Download Spoontacular Ingredient Images", variant="primary")
+                        load_ingredients_btn = gr.Button("Load Spoonacular Ingredients", variant="primary")
+                        download_ingredient_images_btn = gr.Button("Download Spoonacular Ingredient Images", variant="primary")
                         with gr.Column(min_width=150):
                             reset_ingredients_btn = gr.Button("Reset Recipe Ingredients", variant="stop")
                             clear_ingredients_btn = gr.Button("Clear All Ingredients", variant="stop")
@@ -354,17 +364,17 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
         # ------------------------------------------------------------------
         with gr.Tab("2. Manage Recipes"):
             gr.Markdown("""
-            Loads top ranked recipes and their images based on selected ingredientsvia Spoonacular API
+            Loads top ranked recipes and their images based on selected ingredients via Spoonacular API
             """)
 
             with gr.Row():
                 with gr.Column():
 
                     with gr.Row():
-                        get_recipes_btn = gr.Button("Load Spoontacular Recipes", variant="primary")
-                        download_recipe_images_btn = gr.Button("Download Spoontacular Recipe Images", variant="primary")
+                        get_recipes_btn = gr.Button("Load Spoonacular Recipes", variant="primary")
+                        download_recipe_images_btn = gr.Button("Download Spoonacular Recipe Images", variant="primary")
                         with gr.Column(min_width=150):
-                            load_recipe_button = gr.Button("Load Selected Recipes", variant="primary")
+                            load_recipe_button = gr.Button("Load Selected Recipe", variant="primary")
                             clear_recipes_btn = gr.Button("Clear All Recipes", variant="stop")
 
                     gr.Markdown("### 📝 Available Recipe Selection")
@@ -373,26 +383,53 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                     with gr.Row():
                             
-                            # The Selected Ingredients Gallery (Items ready for the recipe)
-                            selected_ingredients_gallery = gr.Gallery(
-                                value=__current_ingredient_gallery_items, 
-                                label="Selected Ingredients", 
-                                elem_id="pantry_list", # Re-use the same CSS for consistency
-                                columns=1, 
-                                height=600, 
-                                interactive=True
-                            )
+                            with gr.Column(scale=2, min_width=300):
+                                # The Selected Ingredients Gallery (Items ready for the recipe)
+                                gr.Markdown("### 🛒 Selected Ingredients")
+                                selected_ingredients_gallery = gr.Gallery(
+                                    value=__current_ingredient_gallery_items, 
+                                    elem_id="pantry_list", 
+                                    columns=1, 
+                                    height=600, 
+                                    interactive=True
+                                )
 
                             # The Available Recipes Gallery 
-                            recipe_gallery = gr.Gallery(
-                                value=__current_recipe_gallery_items, 
-                                label="Available Recipes", 
-                                elem_id="pantry_list", # Re-use the same CSS for consistency
-                                columns=1, 
-                                height=600, 
-                                interactive=True
-                            )
+                            with gr.Column(scale=3, min_width=400):
+                                gr.Markdown("### 📝 Available Recipes")
+                                recipe_gallery = gr.Gallery(
+                                    value=__recipe_gallery_items, 
+                                    elem_id="pantry_list", 
+                                    columns=1, 
+                                    height=600, 
+                                    interactive=True
+                                )
                     
+                    gr.Markdown("### 🔍 Selected Recipe Details")
+                    with gr.Group(): # Group these related fields together visually
+                        with gr.Row():
+                            recipe_title_display = gr.Textbox(label="Recipe Title", interactive=False)
+                            recipe_likes_display = gr.Number(label="Spoonacular Likes", interactive=False)
+
+                        with gr.Row():
+                            with gr.Column():
+                                missing_count_display = gr.Number(label="# Missing Ingredients", interactive=False)
+                                missing_ingredients_list = gr.Textbox(
+                                    label="Missing Items (Shopping List)", 
+                                    lines=5,       # Starting height
+                                    max_lines=8,   # Maximum height before scrollbar locks in
+                                    interactive=False
+                                )
+
+                            with gr.Column():
+                                unused_count_display = gr.Number(label="# Unused Ingredients", interactive=False)
+                                unused_ingredients_list = gr.Textbox(
+                                    label="Unused Items (Already in Pantry)", 
+                                    lines=5, 
+                                    max_lines=8, 
+                                    interactive=False
+                                )
+
                     recipe_load_status = gr.Textbox(label="Recipes Status", lines=4, interactive=False)
 
                                     
@@ -400,7 +437,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     recipe_load_status_holder = gr.Textbox(label="Recipes Status", lines=4, interactive=False)
 
             def toggle_selected_ingredient(data: gr.SelectData):
-                global __current_ingredient_gallery_items, __ingredient_gallery_items
+                global __current_ingredients, __current_ingredient_gallery_items, __ingredient_gallery_items
                 
                 # Get the specific item clicked from the master pantry
                 clicked_item = __ingredient_gallery_items[data.index] 
@@ -408,12 +445,16 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 # If this is the only item in the list, remove it
                 if len(__current_ingredient_gallery_items) == 1 and __current_ingredient_gallery_items[0] == __DEFAULT_LOADING_INGREDIENTS:
                     __current_ingredient_gallery_items = [] 
+                    __current_ingredients = []
                 
                 # Toggle Logic: If it's there, remove it. If not, add it.
+                ingredient_name = clicked_item[1]
                 if clicked_item in __current_ingredient_gallery_items:
                     __current_ingredient_gallery_items.remove(clicked_item)
+                    __current_ingredients.remove(ingredient_name)
                 else:
                     __current_ingredient_gallery_items.append(clicked_item)
+                    __current_ingredients.append(ingredient_name)
 
                 # Check if list is empty; if so add place holder
                 if not __current_ingredient_gallery_items:
@@ -450,7 +491,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
             download_recipe_images_btn.click(
                 fn=download_recipe_images,
-                outputs=[recipe_load_status] #, __current_recipe_gallery_items],
+                outputs=[recipe_load_status, recipe_gallery],
             )   
 
             load_recipe_button.click(
@@ -463,6 +504,42 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 inputs=[],
                 outputs=[ingredient_load_status],
             )
+
+            def on_recipe_select(data: gr.SelectData):
+                global __current_recipes
+                
+                # Use data.index to find the recipe
+                selected_recipe = __current_recipes[data.index]
+                
+                # 1. Extract and format Missing Ingredients
+                missing_objs = selected_recipe.get('missedIngredients', [])
+                missing_names = [obj['name'] for obj in missing_objs]
+                missing_count = len(missing_names)
+                missing_text = "\n".join(missing_names) if missing_names else "None!"
+
+                # 2. Extract and format Unused Ingredients
+                unused_objs = selected_recipe.get('unusedIngredients', [])
+                unused_names = [obj['name'] for obj in unused_objs]
+                unused_count = len(unused_names)
+                unused_text = "\n".join(unused_names) if unused_names else "None"
+
+                # 3. Get title and likes
+                title = selected_recipe.get('title', "Unknown")
+                likes = selected_recipe.get('likes', 0)
+
+                return title, likes, missing_count, missing_text, unused_count, unused_text
+            
+            recipe_gallery.select(
+                fn=on_recipe_select,
+                outputs=[
+                    recipe_title_display, 
+                    recipe_likes_display, 
+                    missing_count_display, 
+                    missing_ingredients_list, 
+                    unused_count_display, 
+                    unused_ingredients_list
+                ]
+            )            
 
 
 if __name__ == "__main__":
