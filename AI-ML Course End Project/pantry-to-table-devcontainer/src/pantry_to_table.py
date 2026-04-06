@@ -26,6 +26,8 @@ import os
 import sys
 import logging
 import time
+import re 
+
 import subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -171,9 +173,93 @@ def download_recipe_images() -> str:
     results = su.download_recipe_images()
     return results, __recipe_gallery_items
 
-def load_recipe() -> tuple[str, any]:
+
+def parse_recipe_details(json_data):
+    """
+    Parses Spoonacular recipe detail JSON into a format suitable for Gradio components.
+    Includes logic to resolve local image paths and returns HTML for the header.
+    """
+    if not json_data:
+        # Returns placeholders for all 13 outputs defined in the UI
+        # Note: The first element is now HTML rather than Markdown
+        return ["<h2>No Recipe Selected</h2>"] + ["N/A"] * 12
+
+    # 1. Resolve Local Image and Construct HTML Header
+    raw_title = json_data.get('title', 'Unknown Recipe')
+    
+    # Sanitization logic: removes non-alphanumeric (except . and -) and spaces/ampersands
+    clean_name = re.sub(r'[^\w\.-]', '', raw_title.replace(" ", "").replace("&", ""))
+    img_type = json_data.get('imageType', 'jpg')
+    
+    # Path to the ORIGINAL non-scaled image
+    local_img_path = f"recipes_images/{clean_name}.{img_type}"
+    
+    # CRITICAL: Convert to Absolute Path for Gradio's 'file/' protocol
+    abs_path = os.path.abspath(local_img_path)
+    file_exists = os.path.exists(abs_path)
+
+    # Debug check: This will show in your terminal
+    if file_exists:
+        print(f"✅ Image found for UI: {abs_path}")
+    else:
+        print(f"❌ Image missing for UI: {abs_path}")
+
+    # Use gr.HTML instead of Markdown to prevent protocol stripping
+    # header_html = f"""
+    # <div style="text-align: center; font-family: sans-serif;">
+    #     <h1 style="margin-bottom: 10px;">{raw_title}</h1>
+    #     <img src="file/{abs_path}" 
+    #          width="100%" 
+    #          style="border-radius: 10px; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-height: 400px; object-fit: cover;"
+    #          alt="{raw_title}">
+    # </div>
+    # """
+    image_url = json_data.get('image', '')
+    
+    header_markdown = f"# {raw_title}\n<img src='{local_img_path}' width='100%'>"    
+
+    # 2. Extract Metadata
+    source = json_data.get('sourceName', 'N/A')
+    score = round(json_data.get('spoonacularScore', 0), 2)
+    price = round(json_data.get('pricePerServing', 0) / 100, 2) # Cents to Dollars
+
+    # 3. Dish Types & Summary
+    dish_types = {dt: 1.0 for dt in json_data.get('dishTypes', [])}
+    summary = json_data.get('summary', 'No summary available.')
+
+    # 4. Ingredients & Instructions
+    ing_list = json_data.get('extendedIngredients', [])
+    ingredients_text = "\n".join([f"• {i.get('original')}" for i in ing_list])
+    instructions = json_data.get('instructions', "No instructions provided.")
+
+    # 5. Wine, Cuisines, and Diets
+    wine_list = json_data.get('winePairing', {}).get('pairedWines', [])
+    wine_text = ", ".join(wine_list) if wine_list else "None suggested"
+    cuisines_text = ", ".join(json_data.get('cuisines', []))
+    diets_text = ", ".join(json_data.get('diets', []))
+
+    # 6. Taste Profile & Nutrition
+    taste_data = json_data.get('taste', {})
+    
+    nutrients = json_data.get('nutrition', {}).get('nutrients', [])
+    key_macros = [n for n in nutrients if n['name'] in ['Calories', 'Fat', 'Carbohydrates', 'Protein']]
+    nutrition_text = "\n".join([
+        f"{m['name']}: {m['amount']}{m['unit']} ({m['percentOfDailyNeeds']}% of daily need)" 
+        for m in key_macros
+    ])
+
+    return (
+        header_markdown, source, score, price, dish_types, summary, 
+        ingredients_text, instructions, wine_text, cuisines_text, 
+        taste_data, diets_text, nutrition_text
+    )
+
+def load_recipe_details(recipe_id, recipe_name) -> tuple[str, any]:
     """Load recipe details for the selected Spoonacular recipe."""
-    print()
+    
+    results = su.load_recipe_details(recipe_id, recipe_name)
+    recipe_details = su.current_recipe_details
+    return parse_recipe_details(recipe_details)
 
 def clear_recipes() -> tuple[str, any]:
     """Delete all the loaded Spoonacular recipes."""
@@ -367,8 +453,13 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
             Loads top ranked recipes and their images based on selected ingredients via Spoonacular API
             """)
 
+            selected_recipe_id = gr.State(value=None)
+            selected_recipe_name = gr.State(value=None)
+
             with gr.Row():
-                with gr.Column():
+
+                # Left Side column
+                with gr.Column(scale=2):
 
                     with gr.Row():
                         get_recipes_btn = gr.Button("Load Spoonacular Recipes", variant="primary")
@@ -433,8 +524,39 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     recipe_load_status = gr.Textbox(label="Recipes Status", lines=4, interactive=False)
 
                                     
-                with gr.Column():
-                    recipe_load_status_holder = gr.Textbox(label="Recipes Status", lines=4, interactive=False)
+                with gr.Column(scale=2): # This should be the right-side column
+                    with gr.Group(elem_id="recipe_detail_panel"):
+                        # Header Area
+                        detail_title = gr.HTML("<h2>📜 Select a Recipe to See Details</h2>")
+                        
+                        with gr.Row():
+                            detail_source = gr.Textbox(label="Source", interactive=False)
+                            detail_score = gr.Number(label="Spoonacular Score", interactive=False)
+                            detail_price = gr.Number(label="Price Per Serving ($)", interactive=False)
+                        
+                        detail_dishtypes = gr.Label(label="Dish Types")
+                        detail_summary = gr.HTML(label="Summary") # Summary contains HTML tags
+                        
+                        # Ingredients & Instructions
+                        with gr.Row():
+                            detail_extended_ingredients = gr.Textbox(
+                                label="Extended Ingredients", 
+                                lines=10, 
+                                max_lines=15, 
+                                interactive=False
+                            )
+                            detail_instructions = gr.Markdown(label="Cooking Instructions")
+
+                        # Wine & Meta
+                        with gr.Row():
+                            detail_wine = gr.Textbox(label="Wine Pairings", interactive=False)
+                            detail_cuisines = gr.Textbox(label="Cuisines", interactive=False)
+                        
+                        # Taste, Diets, and Nutrition
+                        with gr.Row():
+                            detail_taste = gr.Label(label="Taste Profile")
+                            detail_diets = gr.Textbox(label="Diets", interactive=False)
+                            detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
 
             def toggle_selected_ingredient(data: gr.SelectData):
                 global __current_ingredients, __current_ingredient_gallery_items, __ingredient_gallery_items
@@ -495,8 +617,14 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
             )   
 
             load_recipe_button.click(
-                fn=load_recipe,
-                outputs=[recipe_load_status],
+                fn=load_recipe_details,
+                inputs=[selected_recipe_id, selected_recipe_name],
+                outputs=[
+                    detail_title, detail_source, detail_score, detail_price, 
+                    detail_dishtypes, detail_summary, detail_extended_ingredients, 
+                    detail_instructions, detail_wine, detail_cuisines, 
+                    detail_taste, detail_diets, detail_nutrition
+                ]
             )         
 
             clear_recipes_btn.click(
@@ -507,10 +635,14 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
             def on_recipe_select(data: gr.SelectData):
                 global __current_recipes
+
+                # Get the selected recipe id
+                recipe_id = __recipes_id_map.get(data.index)
                 
                 # Use data.index to find the recipe
                 selected_recipe = __current_recipes[data.index]
-                
+                recipe_name = selected_recipe.get('title', "Unknown")
+
                 # 1. Extract and format Missing Ingredients
                 missing_objs = selected_recipe.get('missedIngredients', [])
                 missing_names = [obj['name'] for obj in missing_objs]
@@ -527,7 +659,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 title = selected_recipe.get('title', "Unknown")
                 likes = selected_recipe.get('likes', 0)
 
-                return title, likes, missing_count, missing_text, unused_count, unused_text
+                return title, likes, missing_count, missing_text, unused_count, unused_text, recipe_id, recipe_name
             
             recipe_gallery.select(
                 fn=on_recipe_select,
@@ -537,10 +669,13 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     missing_count_display, 
                     missing_ingredients_list, 
                     unused_count_display, 
-                    unused_ingredients_list
+                    unused_ingredients_list,
+                    selected_recipe_id,
+                    selected_recipe_name
                 ]
             )            
 
 
 if __name__ == "__main__":
-    pantry_to_table.launch()
+    # Add allowed_paths to let Gradio bypass the security sandbox
+    pantry_to_table.launch(allowed_paths=["recipes_images", "recipes_scaled_images"])
