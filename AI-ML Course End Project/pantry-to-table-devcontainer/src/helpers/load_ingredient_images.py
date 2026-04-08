@@ -238,35 +238,6 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     print()
     print('======================================================================')
 
-def purge_pantry_workspace(paths_to_clean):
-    """
-    Safely removes contents of project folders to ensure a clean slate.
-    Accepts a single string path or a list of paths.
-    """
-    if isinstance(paths_to_clean, str):
-        paths_to_clean = [paths_to_clean]
-
-    for folder_path in paths_to_clean:
-        if os.path.exists(folder_path):
-            print(f"🧹 Purging: {folder_path}...")
-            
-            # Attempt a retry loop for Windows/Dev Container file locks
-            for attempt in range(3):
-                try:
-                    shutil.rmtree(folder_path)
-                    # Recreate empty dir for the next load run
-                    os.makedirs(folder_path)
-                    print(f"✅ {folder_path} is now empty.")
-                    break
-                except Exception as e:
-                    if attempt < 2:
-                        print(f"⚠️ Lock detected, retrying {folder_path}...")
-                        time.sleep(1)
-                    else:
-                        print(f"❌ Failed to purge {folder_path}: {e}")
-        else:
-            print(f"ℹ️ Creating new directory: {folder_path}")
-            os.makedirs(folder_path)
 
 def load_pantry_images_from_open_images():
 
