@@ -157,17 +157,23 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
                 location=os.path.join(temp_raw_dir, project_id.replace('/', '_'))
             )
             
-            # Scan the downloaded folders for valid pairs
+            # --- FIXED SCANNING LOGIC ---
             for root, dirs, files in os.walk(dataset.location):
-                if root.endswith("images"):
+                # Check if current folder is named 'images' regardless of full path
+                if os.path.basename(root) == "images":
                     for f in files:
                         if f.lower().endswith(('.jpg', '.jpeg', '.png')):
                             img_path = os.path.join(root, f)
-                            # Locate the matching label file in the sister 'labels' folder
-                            lbl_path = img_path.replace("images", "labels").replace(os.path.splitext(f)[1], ".txt")
+                            
+                            # Construct label path by looking in the sibling 'labels' directory
+                            # Structure: parent/images/file.jpg -> parent/labels/file.txt
+                            parent_dir = os.path.dirname(root)
+                            label_dir = os.path.join(parent_dir, "labels")
+                            lbl_path = os.path.join(label_dir, os.path.splitext(f)[0] + ".txt")
                             
                             if os.path.exists(lbl_path):
                                 all_data_pool.append((img_path, lbl_path))
+            # ----------------------------
         
         except Exception as e:
             print(f"⚠️ Skipping {project_id} due to error: {e}")
@@ -255,12 +261,15 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     
     # Scan the labels folder in the final training set
     train_labels_dir = os.path.join(output_dir, "train", "labels")
-    for label_file in os.listdir(train_labels_dir):
-        with open(os.path.join(train_labels_dir, label_file), 'r') as f:
-            for line in f:
-                class_id = int(line.split()[0])
-                if class_id < len(ingredients):
-                    label_counts[ingredients[class_id]] += 1
+    if os.path.exists(train_labels_dir):
+        for label_file in os.listdir(train_labels_dir):
+            with open(os.path.join(train_labels_dir, label_file), 'r') as f:
+                for line in f:
+                    parts = line.split()
+                    if not parts: continue
+                    class_id = int(parts[0])
+                    if class_id < len(ingredients):
+                        label_counts[ingredients[class_id]] += 1
 
     # Print results in a clean table
     print(f"{'Ingredient':<25} | {'Image Count':<12} | {'Status'}")
