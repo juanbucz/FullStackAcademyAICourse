@@ -221,10 +221,15 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
 
     # 7. Cleanup
     shutil.rmtree(temp_raw_dir)
+
+    print('─────────────────────────────────────────────────────────────────────────')
+    print('─────────────────────────────────────────────────────────────────────────')
     print(f"\n✅ DATASET READY: {output_dir}")
     print(f"Stats: Train({len(train)}) | Val({len(val)}) | Test({len(test)})")
     print(f"\nSUCCESS: Unified Dataset Created")
     print(f"Ready for Blackwell GPU training using data.yaml")
+    print('─────────────────────────────────────────────────────────────────────────')
+    print('─────────────────────────────────────────────────────────────────────────')
 
     # 8. Print Timing statistics
     elapsed = time.time() - imageload_start_time
@@ -232,11 +237,13 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     hours = int(elapsed // 3600)
     minutes = int((elapsed % 3600) // 60)
     seconds = int(elapsed % 60)
-    print('======================================================================')
+    print('─────────────────────────────────────────────────────────────────────────')
+    print('─────────────────────────────────────────────────────────────────────────')
     print()
     print(f'Total Image Load and Merge runtime: {hours}h {minutes}m {seconds}s')
     print()
-    print('======================================================================')
+    print('─────────────────────────────────────────────────────────────────────────')
+    print('─────────────────────────────────────────────────────────────────────────')
 
 
 def load_pantry_images_from_open_images():
