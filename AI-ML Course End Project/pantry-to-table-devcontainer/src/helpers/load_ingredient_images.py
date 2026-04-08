@@ -15,6 +15,7 @@ from roboflow import Roboflow
 from sklearn.model_selection import train_test_split
 from dotenv import load_dotenv, find_dotenv
 
+
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # API Keys
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -61,13 +62,6 @@ SAMPLES_PER_INGREDIENT = 100      # Final "Clean" count for training
 
 PANTRY_INGREDIENTS_IMAGES_FOLDER = '../../downloaded_images/pantry_ingredients_images'
 TEMPORARY_RAW_IMAGES_FOLDER      = '../../downloaded_images/temp_raw_downloads'
-
-import os
-import shutil
-import random
-from dotenv import load_dotenv, find_dotenv
-from roboflow import Roboflow
-from sklearn.model_selection import train_test_split
 
 def purge_pantry_workspace(paths_to_clean):
     """
@@ -323,12 +317,12 @@ def load_pantry_images_from_open_images():
 
     purge_pantry_workspace([TEMPORARY_RAW_IMAGES_FOLDER, PANTRY_INGREDIENTS_IMAGES_FOLDER])
 
-    download_pantry_vision_dataset(
-                                    ingredients=TEST_INGREDIENTS_SET, 
-                                    pool_size=MAX_IMAGE_SAMPLES, 
-                                    final_size=SAMPLES_PER_INGREDIENT,
-                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
-                                )
+    # download_pantry_vision_dataset(
+    #                                 ingredients=TEST_INGREDIENTS_SET, 
+    #                                 pool_size=MAX_IMAGE_SAMPLES, 
+    #                                 final_size=SAMPLES_PER_INGREDIENT,
+    #                                 output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
+    #                             )
 
 
 if __name__ == "__main__":
