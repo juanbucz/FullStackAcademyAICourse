@@ -314,12 +314,12 @@ def load_pantry_images_from_open_images():
 
     purge_pantry_workspace([TEMPORARY_RAW_IMAGES_FOLDER, PANTRY_INGREDIENTS_IMAGES_FOLDER])
 
-    # download_pantry_vision_dataset(
-    #                                 ingredients=TEST_INGREDIENTS_SET, 
-    #                                 pool_size=MAX_IMAGE_SAMPLES, 
-    #                                 final_size=SAMPLES_PER_INGREDIENT,
-    #                                 output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
-    #                             )
+    download_pantry_vision_dataset(
+                                    ingredients=TEST_INGREDIENTS_SET, 
+                                    pool_size=MAX_IMAGE_SAMPLES, 
+                                    final_size=SAMPLES_PER_INGREDIENT,
+                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
+                                )
 
 
 if __name__ == "__main__":
