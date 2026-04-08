@@ -67,6 +67,46 @@ from dotenv import load_dotenv, find_dotenv
 from roboflow import Roboflow
 from sklearn.model_selection import train_test_split
 
+def purge_pantry_workspace(paths_to_clean):
+    """
+    Safely removes contents of project folders to ensure a clean slate.
+    Accepts a single string path or a list of paths.
+    """
+    if isinstance(paths_to_clean, str):
+        paths_to_clean = [paths_to_clean]
+
+    for folder_path in paths_to_clean:
+        if os.path.exists(folder_path):
+            print(f"🧹 Purging: {folder_path}...")
+            
+            # Attempt a retry loop for Windows/Dev Container file locks
+            for attempt in range(3):
+                try:
+                    shutil.rmtree(folder_path)
+                    # Recreate empty dir for the next load run
+                    os.makedirs(folder_path)
+                    print(f"✅ {folder_path} is now empty.")
+                    break
+                except Exception as e:
+                    if attempt < 2:
+                        print(f"⚠️ Lock detected, retrying {folder_path}...")
+                        time.sleep(1)
+                    else:
+                        print(f"❌ Failed to purge {folder_path}: {e}")
+        else:
+            print(f"ℹ️ Creating new directory: {folder_path}")
+            os.makedirs(folder_path)
+
+def load_pantry_images_from_open_images():
+
+    download_pantry_vision_dataset(
+                                    ingredients=TEST_INGREDIENTS_SET, 
+                                    pool_size=MAX_IMAGE_SAMPLES, 
+                                    final_size=SAMPLES_PER_INGREDIENT,
+                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
+                                )
+
+
 def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None, output_dir="pantry_data"):
     """
     Downloads and prepares a unified YOLOv8 dataset from Roboflow Universe sources.
@@ -101,8 +141,7 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     ]
 
     temp_raw_dir = "temp_raw_downloads"
-    if os.path.exists(temp_raw_dir):
-        shutil.rmtree(temp_raw_dir)
+    purge_pantry_workspace([temp_raw_dir, output_dir])
     os.makedirs(output_dir, exist_ok=True)
 
     all_data_pool = [] # Store tuples of (image_path, label_path)
