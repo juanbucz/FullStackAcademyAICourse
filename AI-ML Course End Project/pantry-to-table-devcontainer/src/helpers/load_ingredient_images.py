@@ -9,9 +9,10 @@ import os
 import shutil
 import time
 import random
+import cv2
+import numpy as np
 from roboflow import Roboflow
 from sklearn.model_selection import train_test_split
-
 from dotenv import load_dotenv, find_dotenv
 
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -58,7 +59,8 @@ FULL_INGREDIENTS_SET = VEGETABLE_INGREDIENTS + FRUIT_INGREDIENTS + MEAT_INGREDIE
 MAX_IMAGE_SAMPLES      = 200      # Raw download pool per ingredient
 SAMPLES_PER_INGREDIENT = 100      # Final "Clean" count for training
 
-PANTRY_INGREDIENTS_IMAGES_FOLDER = '../pantry_ingredients_images'
+PANTRY_INGREDIENTS_IMAGES_FOLDER = '../../downloaded_images/pantry_ingredients_images'
+TEMPORARY_RAW_IMAGES_FOLDER      = '../../downloaded_images/temp_raw_downloads'
 
 import os
 import shutil
@@ -82,7 +84,10 @@ def purge_pantry_workspace(paths_to_clean):
             # Attempt a retry loop for Windows/Dev Container file locks
             for attempt in range(3):
                 try:
+                    # Specific check: if we are purging temp_raw_downloads, 
+                    # we want to ensure all sub-images are gone before recreation
                     shutil.rmtree(folder_path)
+                    
                     # Recreate empty dir for the next load run
                     os.makedirs(folder_path)
                     print(f"✅ {folder_path} is now empty.")
@@ -96,15 +101,6 @@ def purge_pantry_workspace(paths_to_clean):
         else:
             print(f"ℹ️ Creating new directory: {folder_path}")
             os.makedirs(folder_path)
-
-def load_pantry_images_from_open_images():
-
-    download_pantry_vision_dataset(
-                                    ingredients=TEST_INGREDIENTS_SET, 
-                                    pool_size=MAX_IMAGE_SAMPLES, 
-                                    final_size=SAMPLES_PER_INGREDIENT,
-                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
-                                )
 
 
 def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None, output_dir="pantry_data"):
@@ -128,21 +124,23 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     
     source_projects = [
         # 1. Product-Centric & Pantry Staples
-        {"id": "michael-ringer/freiburg-groceries", "version": 10},      # Verified: 4,933 images (Original stable)
+        {"id": "michael-ringer/freiburg-groceries", "version": 10},     # Verified: 4,933 images (Original stable)
         {"id": "houda-blj4y/groceries-epwwx", "version": 2},            # Verified: Pantry staples
-        {"id": "biscocho-john-kenneth-8bpsb/nutrilense", "version": 4},   # Verified: Retail packaging (Tuna, Milk, Sauces)
+        {"id": "biscocho-john-kenneth-8bpsb/nutrilense", "version": 1}, # Verified: Retail packaging (Tuna, Milk, Sauces)
         
         # 2. Raw Proteins (The "Fridge" Inventory)
-        {"id": "food-recognition/united_yolov8_test", "version": 1},      # Verified: Raw meats/fish focus
-        {"id": "object-detection-f8udo/ingredients-v2", "version": 2},    # Verified: Raw Salmon, Pork, Scallops
+        # Verified: Raw meats/fish focus
+        {"id": "object-detection-f8udo/ingredients-v2", "version": 1},  # Verified: Raw Salmon, Pork, Scallops
         
         # 3. Produce (Fresh Inventory)
-        {"id": "vth4f/combined-vegetables-fruits", "version": 1}        # Verified: Bulk Produce
+        {"id": "yolo-jpkho/combined-vegetables-fruits", "version": 1},  # Verified: Bulk Produce
     ]
 
-    temp_raw_dir = "temp_raw_downloads"
-    purge_pantry_workspace([temp_raw_dir, output_dir])
     os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(TEMPORARY_RAW_IMAGES_FOLDER, exist_ok=True)
+
+    temp_raw_dir = TEMPORARY_RAW_IMAGES_FOLDER
+    purge_pantry_workspace([temp_raw_dir, output_dir])
 
     all_data_pool = [] # Store tuples of (image_path, label_path)
 
@@ -179,10 +177,51 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
         print("❌ CRITICAL ERROR: No image/label pairs found. Check project IDs and API permissions.")
         return
 
-    print(f"Total valid image/label pairs found: {len(all_data_pool)}")
-    
-    # Shuffle for randomness
+    # ─── UNDERSAMPLING & TOP-UP LOGIC ───
+    print(f"\n⚖️ Balancing Dataset: Aiming for {final_size} images per ingredient...")
     random.shuffle(all_data_pool)
+    
+    # Track which images belong to which class to handle undersampling/top-up
+    class_map = {i: [] for i in range(len(ingredients))}
+    for img_p, lbl_p in all_data_pool:
+        try:
+            with open(lbl_p, 'r') as f:
+                lines = f.readlines()
+                if not lines: continue
+                class_id = int(lines[0].split()[0])
+                # Only map if we haven't hit the undersampling cap (final_size)
+                if class_id < len(ingredients) and len(class_map[class_id]) < final_size:
+                    class_map[class_id].append((img_p, lbl_p))
+        except: continue
+
+    balanced_pool = []
+    for class_id, pairs in class_map.items():
+        current_count = len(pairs)
+        balanced_pool.extend(pairs)
+        
+        # TOP-UP (Augmentation) if we are below final_size
+        if 0 < current_count < final_size:
+            num_needed = final_size - current_count
+            print(f"🔄 Augmenting {ingredients[class_id]}: {current_count} -> {final_size}")
+            for i in range(num_needed):
+                src_img_p, src_lbl_p = random.choice(pairs)
+                ext = os.path.splitext(src_img_p)[1]
+                aug_img_p = src_img_p.replace(ext, f"_aug_{i}{ext}")
+                aug_lbl_p = src_lbl_p.replace(".txt", f"_aug_{i}.txt")
+
+                img = cv2.imread(src_img_p)
+                if random.random() > 0.5: img = cv2.flip(img, 1) # Flip
+                hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float64)
+                hsv[:,:,2] *= random.uniform(0.8, 1.2) # Brightness
+                hsv[:,:,2][hsv[:,:,2] > 255] = 255
+                img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+                
+                cv2.imwrite(aug_img_p, img)
+                shutil.copy(src_lbl_p, aug_lbl_p)
+                balanced_pool.append((aug_img_p, aug_lbl_p))
+
+    all_data_pool = balanced_pool
+    print(f"Total balanced image/label pairs: {len(all_data_pool)}")
     
     # 80/20 Split for Test, then 80/20 for Train/Val
     train_val, test = train_test_split(all_data_pool, test_size=0.20, random_state=42)
@@ -207,6 +246,32 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
             
             shutil.copy(img_path, os.path.join(img_dest, unique_name))
             shutil.copy(lbl_path, os.path.join(lbl_dest, unique_label))
+
+    # 5.5. Dataset Balance Report
+    print('─' * 55)
+    print("\n--- 📊 Dataset Balance Report ---")
+    print('─' * 55)
+    label_counts = {name: 0 for name in ingredients}
+    
+    # Scan the labels folder in the final training set
+    train_labels_dir = os.path.join(output_dir, "train", "labels")
+    for label_file in os.listdir(train_labels_dir):
+        with open(os.path.join(train_labels_dir, label_file), 'r') as f:
+            for line in f:
+                class_id = int(line.split()[0])
+                if class_id < len(ingredients):
+                    label_counts[ingredients[class_id]] += 1
+
+    # Print results in a clean table
+    print(f"{'Ingredient':<25} | {'Image Count':<12} | {'Status'}")
+    print('─' * 55)
+    for name, count in sorted(label_counts.items(), key=lambda x: x[1], reverse=True):
+        status = "✅ OK" if count >= 150 else "⚠️ LOW"
+        if count == 0: status = "❌ MISSING"
+        print(f"{name:<25} | {count:<12} | {status}")
+    
+    print('─' * 55)
+    print()
 
     # 6. Generate Master data.yaml
     yaml_path = os.path.join(output_dir, "data.yaml")
@@ -233,7 +298,6 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
 
     # 8. Print Timing statistics
     elapsed = time.time() - imageload_start_time
-    elapsed = 1900
     hours = int(elapsed // 3600)
     minutes = int((elapsed % 3600) // 60)
     seconds = int(elapsed % 60)
@@ -248,12 +312,14 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
 
 def load_pantry_images_from_open_images():
 
-    download_pantry_vision_dataset(
-                                    ingredients=TEST_INGREDIENTS_SET, 
-                                    pool_size=MAX_IMAGE_SAMPLES, 
-                                    final_size=SAMPLES_PER_INGREDIENT,
-                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
-                                )
+    purge_pantry_workspace([TEMPORARY_RAW_IMAGES_FOLDER, PANTRY_INGREDIENTS_IMAGES_FOLDER])
+
+    # download_pantry_vision_dataset(
+    #                                 ingredients=TEST_INGREDIENTS_SET, 
+    #                                 pool_size=MAX_IMAGE_SAMPLES, 
+    #                                 final_size=SAMPLES_PER_INGREDIENT,
+    #                                 output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
+    #                             )
 
 
 if __name__ == "__main__":
