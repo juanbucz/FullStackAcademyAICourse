@@ -24,6 +24,12 @@ pandas
 numpy
 opencv-python
 
+# --- Fiftyone - for Open Images V7  ---
+#fiftyone
+
+# --- Roboflow Universe Images  ---
+roboflow
+
 # --- Developer Productivity ---
 loguru
 tqdm
