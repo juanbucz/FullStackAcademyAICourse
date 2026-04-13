@@ -1,0 +1,18 @@
+path: /workspaces/pantry-to-table-devcontainer/downloaded_images/pantry_ingredients_images
+train: train/images
+val: val/images
+test: test/images
+
+names:
+  0: Carrot
+  1: Broccoli
+  2: Bell pepper
+  3: Tomato
+  4: Lemon
+  5: Corn
+  6: Eggplant
+  7: Cucumber
+  8: Onion
+  9: Potato
+  10: Mushroom
+  11: Avocado

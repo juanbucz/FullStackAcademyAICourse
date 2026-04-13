@@ -6,10 +6,12 @@
 """
 
 import os
-import shutil
+import re
 import time
 import random
+import shutil
 import cv2
+import yaml
 import numpy as np
 from roboflow import Roboflow
 from sklearn.model_selection import train_test_split
@@ -28,7 +30,11 @@ roboflow_api_key = os.getenv("ROBOFLOW_API_KEY")
 # Ingredient Sets
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-TEST_INGREDIENTS_SET = ['Carrot', 'Tomato', 'Cabbage', 'Potato', 'Chicken', 'Pasta', 'Bell pepper', 'Zucchini', 'Lemon', 'Cheese']
+# TEST_INGREDIENTS_SET = ['Carrot', 'Tomato', 'Cabbage', 'Potato', 'Chicken', 'Pasta', 'Bell pepper', 'Zucchini', 'Lemon', 'Cheese']
+
+TEST_INGREDIENTS_SET = ['Carrot', 'Broccoli', 'Bell pepper', 'Tomato', 'Lemon',
+                        'Corn', 'Eggplant', 'Cucumber', 'Onion', 'Potato',
+                        'Mushroom', 'Avocado']
 
 VEGETABLE_INGREDIENTS = ['Artichoke', 'Asparagus', 'Bell pepper', 'Broccoli', 'Cabbage', 'Carrot', 
                         'Cauliflower', 'Celery', 'Corn', 'Cucumber', 'Eggplant', 'Zucchini', 'Green bean', 
@@ -57,10 +63,11 @@ FULL_INGREDIENTS_SET = VEGETABLE_INGREDIENTS + FRUIT_INGREDIENTS + MEAT_INGREDIE
 # Constants
 # ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-MAX_IMAGE_SAMPLES      = 200      # Raw download pool per ingredient
-SAMPLES_PER_INGREDIENT = 100      # Final "Clean" count for training
+MAX_IMAGE_SAMPLES      = 20000      # Raw download pool per ingredient
+SAMPLES_PER_INGREDIENT = 500        # Final "Clean" count for training
 
 PANTRY_INGREDIENTS_IMAGES_FOLDER = '../../downloaded_images/pantry_ingredients_images'
+DATA_YAML_FILE_FOLDER            = '../../notebooks/pantrydata'
 TEMPORARY_RAW_IMAGES_FOLDER      = '../../downloaded_images/temp_raw_downloads'
 
 def purge_pantry_workspace(paths_to_clean):
@@ -97,6 +104,16 @@ def purge_pantry_workspace(paths_to_clean):
             os.makedirs(folder_path)
 
 
+def normalize_name(name):
+    """
+    Standardizes ingredient names for reliable mapping.
+    """
+    if not name:
+        return ""
+    name = name.lower()
+    name = re.sub(r'[-_]', ' ', name)
+    return name.strip()
+
 def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None, output_dir="pantry_data"):
     """
     Downloads and prepares a unified YOLOv8 dataset from Roboflow Universe sources.
@@ -113,30 +130,46 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
     # For Tracking Notebook runtime/performance
     imageload_start_time = time.time()
 
-    # 2. Setup Roboflow & Corrected Project IDs
+    # 2. Setup Roboflow & Normalized Master Map
     rf = Roboflow(api_key=api_key)
     
+    master_map = {normalize_name(name): i for i, name in enumerate(ingredients)}
+    unresolved_classes = {}
+
     source_projects = [
-        # 1. Product-Centric & Pantry Staples
-        {"id": "michael-ringer/freiburg-groceries", "version": 10},     # Verified: 4,933 images (Original stable)
-        {"id": "houda-blj4y/groceries-epwwx", "version": 2},            # Verified: Pantry staples
-        {"id": "biscocho-john-kenneth-8bpsb/nutrilense", "version": 1}, # Verified: Retail packaging (Tuna, Milk, Sauces)
-        
-        # 2. Raw Proteins (The "Fridge" Inventory)
-        # Verified: Raw meats/fish focus
-        {"id": "object-detection-f8udo/ingredients-v2", "version": 1},  # Verified: Raw Salmon, Pork, Scallops
-        
-        # 3. Produce (Fresh Inventory)
-        {"id": "yolo-jpkho/combined-vegetables-fruits", "version": 1},  # Verified: Bulk Produce
-    ]
+        {"id": "vegetables/vegetables-el4g6",                                       "version": 1},
+        {"id": "sqdq/fruits-and-vegetables-qlxmk",                                  "version": 1},
+        {"id": "zzigmug/fruits-and-vegetables-knetf",                               "version": 1},
+        {"id": "yaman-e/food-ingredients-detection-qfit7",                          "version": 48}, 
+        {"id": "lhu-dqyuc/fruits-and-vegetables-mfsau",                             "version": 1},
+        {"id": "college-74jj5/freshness-fruits-and-vegetables",                     "version": 1},
+        {"id": "cse299/fruit-and-vegetable",                                        "version": 1},
+        {"id": "project-6000-agriculture/fruits-and-vegetables-17y0t",              "version": 1},
+        {"id": "michael-ringer/freiburg-groceries",                                 "version": 10},
+
+        # Additional Sources to try to capture fruit/vegetables in their raw state
+        # 24,583 images, CC BY 4.0
+        # Classes: Carrot, Cabbage, Cucumber, Eggplant, Onion, Potato, Tomato
+        {"id": "nutrilens-qvsz6/food-ingredients-detection-nxe34",                  "version": 3},
+
+        # 7,952 images, CC BY 4.0
+        # Classes: carrot, cucumber, eggplant, onion, potato, tomato, corn, bell pepper
+        # Confirmed raw whole vegetables from image thumbnails
+        {"id": "test-on9hk/vegetables-kacga",                                       "version": 5},
+
+        # 9,780 images, license UNCONFIRMED — verify before training use
+        # Classes: Carrot, Broccoli, Tomato, Potato, Onion, Cucumber, Corn, Avocado, Mushroom
+        {"id": "food-recipe-ingredient-images-0gnku/food-ingredients-dataset",      "version": 4},
+    ]    
 
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(TEMPORARY_RAW_IMAGES_FOLDER, exist_ok=True)
+    os.makedirs(DATA_YAML_FILE_FOLDER, exist_ok=True)
 
     temp_raw_dir = TEMPORARY_RAW_IMAGES_FOLDER
     purge_pantry_workspace([temp_raw_dir, output_dir])
 
-    all_data_pool = [] # Store tuples of (image_path, label_path)
+    all_data_pool = [] 
 
     # 3. Download and Aggregate Data
     for proj in source_projects:
@@ -144,92 +177,97 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
         print(f"--- Fetching source: {project_id} ---")
         
         try:
-            # Use rf.project() for public Universe access
-            project = rf.project(project_id)
-            dataset = project.version(proj['version']).download(
+            project_obj = rf.project(project_id)
+            version_obj = project_obj.version(proj['version'])
+            
+            dataset = version_obj.download(
                 "yolov8", 
                 location=os.path.join(temp_raw_dir, project_id.replace('/', '_'))
             )
+
+            # --- FIXED: Build translation_map from the downloaded data.yaml ---
+            with open(os.path.join(dataset.location, "data.yaml"), 'r') as yf:
+                local_yaml = yaml.safe_load(yf)
+                local_names = local_yaml.get('names', [])
             
-            # --- FIXED SCANNING LOGIC ---
+            name_list = local_names if isinstance(local_names, list) else list(local_names.values())
+            translation_map = {i: master_map[normalize_name(n)] 
+                              for i, n in enumerate(name_list) if normalize_name(n) in master_map}
+
+            # SCANNING LOGIC
             for root, dirs, files in os.walk(dataset.location):
-                # Check if current folder is named 'images' regardless of full path
                 if os.path.basename(root) == "images":
                     for f in files:
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png')):
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png')) and len(all_data_pool) < pool_size:
                             img_path = os.path.join(root, f)
-                            
-                            # Construct label path by looking in the sibling 'labels' directory
-                            # Structure: parent/images/file.jpg -> parent/labels/file.txt
-                            parent_dir = os.path.dirname(root)
-                            label_dir = os.path.join(parent_dir, "labels")
-                            lbl_path = os.path.join(label_dir, os.path.splitext(f)[0] + ".txt")
+                            lbl_path = os.path.join(os.path.dirname(root), "labels", os.path.splitext(f)[0] + ".txt")
                             
                             if os.path.exists(lbl_path):
-                                all_data_pool.append((img_path, lbl_path))
-            # ----------------------------
+                                with open(lbl_path, 'r') as lf:
+                                    lines = [l.strip() for l in lf.readlines() if l.strip()]
+                                
+                                if len(lines) == 1:
+                                    try:
+                                        source_id = int(lines[0].split()[0])
+                                        if source_id in translation_map:
+                                            master_id = translation_map[source_id]
+                                            all_data_pool.append((img_path, lbl_path, master_id))
+                                    except (ValueError, IndexError):
+                                        continue
         
         except Exception as e:
             print(f"⚠️ Skipping {project_id} due to error: {e}")
 
-    # 4. Validation & Stratification
+    # 4. Validation
     if not all_data_pool:
-        print("❌ CRITICAL ERROR: No image/label pairs found. Check project IDs and API permissions.")
+        print("❌ CRITICAL ERROR: No image/label pairs found.")
         return
 
-    # ─── UNDERSAMPLING & TOP-UP LOGIC ───
+    # 5. Balancing & Augmentation
     print(f"\n⚖️ Balancing Dataset: Aiming for {final_size} images per ingredient...")
     random.shuffle(all_data_pool)
     
-    # Track which images belong to which class to handle undersampling/top-up
     class_map = {i: [] for i in range(len(ingredients))}
-    for img_p, lbl_p in all_data_pool:
-        try:
-            with open(lbl_p, 'r') as f:
-                lines = f.readlines()
-                if not lines: continue
-                class_id = int(lines[0].split()[0])
-                # Only map if we haven't hit the undersampling cap (final_size)
-                if class_id < len(ingredients) and len(class_map[class_id]) < final_size:
-                    class_map[class_id].append((img_p, lbl_p))
-        except: continue
+    for img_p, lbl_p, master_id in all_data_pool:
+        if len(class_map[master_id]) < final_size:
+            class_map[master_id].append((img_p, lbl_p, master_id))
 
     balanced_pool = []
     for class_id, pairs in class_map.items():
         current_count = len(pairs)
         balanced_pool.extend(pairs)
         
-        # TOP-UP (Augmentation) if we are below final_size
         if 0 < current_count < final_size:
             num_needed = final_size - current_count
             print(f"🔄 Augmenting {ingredients[class_id]}: {current_count} -> {final_size}")
             for i in range(num_needed):
-                src_img_p, src_lbl_p = random.choice(pairs)
+                src_img_p, src_lbl_p, m_id = random.choice(pairs)
                 ext = os.path.splitext(src_img_p)[1]
-                aug_img_p = src_img_p.replace(ext, f"_aug_{i}{ext}")
-                aug_lbl_p = src_lbl_p.replace(".txt", f"_aug_{i}.txt")
+                
+                # Maintain identical base naming for augmented file pairs
+                aug_base = os.path.splitext(os.path.basename(src_img_p))[0] + f"_aug_{i}"
+                aug_img_p = os.path.join(os.path.dirname(src_img_p), aug_base + ext)
+                aug_lbl_p = os.path.join(os.path.dirname(src_lbl_p), aug_base + ".txt")
 
                 img = cv2.imread(src_img_p)
-                if random.random() > 0.5: img = cv2.flip(img, 1) # Flip
+                if img is None: continue
+                if random.random() > 0.5: img = cv2.flip(img, 1) 
                 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float64)
-                hsv[:,:,2] *= random.uniform(0.8, 1.2) # Brightness
+                hsv[:,:,2] *= random.uniform(0.8, 1.2) 
                 hsv[:,:,2][hsv[:,:,2] > 255] = 255
                 img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
                 
                 cv2.imwrite(aug_img_p, img)
                 shutil.copy(src_lbl_p, aug_lbl_p)
-                balanced_pool.append((aug_img_p, aug_lbl_p))
+                balanced_pool.append((aug_img_p, aug_lbl_p, m_id))
 
     all_data_pool = balanced_pool
-    print(f"Total balanced image/label pairs: {len(all_data_pool)}")
-    
-    # 80/20 Split for Test, then 80/20 for Train/Val
-    train_val, test = train_test_split(all_data_pool, test_size=0.20, random_state=42)
-    train, val = train_test_split(train_val, test_size=0.20, random_state=42)
-
+    # --- FIXED: 70/15/15 SPLIT LOGIC ---
+    train_val, test = train_test_split(all_data_pool, test_size=0.15, random_state=42)
+    train, val = train_test_split(train_val, test_size=0.1764, random_state=42) # 0.15 / 0.85 approx 0.1764
     split_map = {'train': train, 'val': val, 'test': test}
 
-    # 5. Export to Unified YOLO Structure
+   # 6. Export to Unified YOLO Structure
     print(f"Merging data into {output_dir}...")
     for split_name, pairs in split_map.items():
         img_dest = os.path.join(output_dir, split_name, "images")
@@ -237,92 +275,55 @@ def download_pantry_vision_dataset(ingredients, pool_size=None, final_size=None,
         os.makedirs(img_dest, exist_ok=True)
         os.makedirs(lbl_dest, exist_ok=True)
 
-        for img_path, lbl_path in pairs:
-            # Copy with original names to prevent collisions if projects have same filenames
-            # We use the parent folder name as a prefix to ensure uniqueness
-            prefix = os.path.basename(os.path.dirname(os.path.dirname(img_path)))
-            unique_name = f"{prefix}_{os.path.basename(img_path)}"
-            unique_label = f"{prefix}_{os.path.basename(lbl_path)}"
+        for i, (img_path, lbl_path, master_id) in enumerate(pairs):
+            # --- FIXED: Simplified Naming (classname-uniqueid.ext) ---
+            class_name = ingredients[master_id].lower().replace(" ", "_")
+            unique_base = f"{class_name}-{i}"
+            ext = os.path.splitext(img_path)[1]
             
-            shutil.copy(img_path, os.path.join(img_dest, unique_name))
-            shutil.copy(lbl_path, os.path.join(lbl_dest, unique_label))
+            shutil.copy(img_path, os.path.join(img_dest, unique_base + ext))
+            
+            with open(os.path.join(lbl_dest, unique_base + ".txt"), 'w') as nf:
+                with open(lbl_path, 'r') as of:
+                    for line in of:
+                        parts = line.split()
+                        if not parts: continue
+                        parts[0] = str(master_id)
+                        nf.write(" ".join(parts) + "\n")
 
-    # 5.5. Dataset Balance Report
-    print('─' * 55)
-    print("\n--- 📊 Dataset Balance Report ---")
-    print('─' * 55)
-    label_counts = {name: 0 for name in ingredients}
-    
-    # Scan the labels folder in the final training set
-    train_labels_dir = os.path.join(output_dir, "train", "labels")
-    if os.path.exists(train_labels_dir):
-        for label_file in os.listdir(train_labels_dir):
-            with open(os.path.join(train_labels_dir, label_file), 'r') as f:
-                for line in f:
-                    parts = line.split()
-                    if not parts: continue
-                    class_id = int(parts[0])
-                    if class_id < len(ingredients):
-                        label_counts[ingredients[class_id]] += 1
-
-    # Print results in a clean table
-    print(f"{'Ingredient':<25} | {'Image Count':<12} | {'Status'}")
-    print('─' * 55)
-    for name, count in sorted(label_counts.items(), key=lambda x: x[1], reverse=True):
-        status = "✅ OK" if count >= 150 else "⚠️ LOW"
-        if count == 0: status = "❌ MISSING"
-        print(f"{name:<25} | {count:<12} | {status}")
-    
-    print('─' * 55)
-    print()
-
-    # 6. Generate Master data.yaml
-    yaml_path = os.path.join(output_dir, "data.yaml")
+    # 7. Generate Master data.yaml
+    yaml_path = os.path.join(DATA_YAML_FILE_FOLDER, "data.yaml")
     with open(yaml_path, "w") as f:
         f.write(f"path: {os.path.abspath(output_dir)}\n")
-        f.write("train: train/images\n")
-        f.write("val: val/images\n")
-        f.write("test: test/images\n\n")
-        f.write("names:\n")
+        f.write("train: train/images\nval: val/images\ntest: test/images\n\nnames:\n")
         for i, name in enumerate(ingredients):
             f.write(f"  {i}: {name}\n")
 
-    # 7. Cleanup
+    # 8. Cleanup
     shutil.rmtree(temp_raw_dir)
 
     print('─────────────────────────────────────────────────────────────────────────')
-    print('─────────────────────────────────────────────────────────────────────────')
     print(f"\n✅ DATASET READY: {output_dir}")
     print(f"Stats: Train({len(train)}) | Val({len(val)}) | Test({len(test)})")
-    print(f"\nSUCCESS: Unified Dataset Created")
-    print(f"Ready for Blackwell GPU training using data.yaml")
-    print('─────────────────────────────────────────────────────────────────────────')
     print('─────────────────────────────────────────────────────────────────────────')
 
-    # 8. Print Timing statistics
     elapsed = time.time() - imageload_start_time
     hours = int(elapsed // 3600)
     minutes = int((elapsed % 3600) // 60)
     seconds = int(elapsed % 60)
-    print('─────────────────────────────────────────────────────────────────────────')
-    print('─────────────────────────────────────────────────────────────────────────')
-    print()
     print(f'Total Image Load and Merge runtime: {hours}h {minutes}m {seconds}s')
-    print()
     print('─────────────────────────────────────────────────────────────────────────')
-    print('─────────────────────────────────────────────────────────────────────────')
-
-
+    
 def load_pantry_images_from_open_images():
 
     purge_pantry_workspace([TEMPORARY_RAW_IMAGES_FOLDER, PANTRY_INGREDIENTS_IMAGES_FOLDER])
 
-    # download_pantry_vision_dataset(
-    #                                 ingredients=TEST_INGREDIENTS_SET, 
-    #                                 pool_size=MAX_IMAGE_SAMPLES, 
-    #                                 final_size=SAMPLES_PER_INGREDIENT,
-    #                                 output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
-    #                             )
+    download_pantry_vision_dataset(
+                                    ingredients=TEST_INGREDIENTS_SET, 
+                                    pool_size=MAX_IMAGE_SAMPLES, 
+                                    final_size=SAMPLES_PER_INGREDIENT,
+                                    output_dir=PANTRY_INGREDIENTS_IMAGES_FOLDER
+                                )
 
 
 if __name__ == "__main__":
