@@ -7,6 +7,7 @@ import os
 import shutil
 import logging
 from datetime import datetime
+from typing import Tuple, Optional
 
 import requests
 import json
@@ -49,7 +50,6 @@ class spoonacular_utilities:
     all_ingredients        = []
     current_recipes        = []
     current_recipe_details = None
-    
 
     # ─────────────────────────────────────────
     # Spoonacular API HELPERS
@@ -109,24 +109,24 @@ class spoonacular_utilities:
         )
     
     @staticmethod
-    def download_ingredient_images() -> str:
+    def download_ingredient_images(ingredients_list=all_ingredients, path=__INGREDIENTS_IMAGE_DIR) -> str:
         """Download and save images associated with loaded ingredients"""
         su = spoonacular_utilities          # ← alias
 
         status = []
 
-        os.makedirs(su.__INGREDIENTS_IMAGE_DIR, exist_ok=True)
-        results = utils.clear_directory(su.__INGREDIENTS_IMAGE_DIR)
+        os.makedirs(path, exist_ok=True)
+        results = utils.clear_directory(path)
         utils.logger.info(results)
         status.append(results)
 
-        for item in su.all_ingredients:
+        for item in ingredients_list:
             # 1. Construct the URL
             img_name = item['image']  # e.g., 'apple.jpg'
             img_url = f'{su.__INGREDIENTS_IMAGE_URL}{su.__INGREDIENTS_IMAGE_SIZE}/{img_name}'
             
             # 2. Define local save path
-            save_path = os.path.join(su.__INGREDIENTS_IMAGE_DIR, img_name)
+            save_path = os.path.join(path, img_name)
             
             # 3. Download and Save
             try:
@@ -142,6 +142,7 @@ class spoonacular_utilities:
                 status.append(f'Error downloading {img_name}: {e}')
 
         return "\n".join(status)
+    
     
     @staticmethod
     def load_Spoonacular_recipes(ingredients_list) -> str:

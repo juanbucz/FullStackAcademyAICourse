@@ -34,6 +34,7 @@ from PIL import Image, ImageDraw
 
 from utilities.utilities import utilities as utils
 from utilities.spoonacular_utilities import spoonacular_utilities as su
+from utilities.yolov8_utilities import yolov8_utilities as yolo_utils
 
 os.environ['TF_USE_LEGACY_KERAS'] = '1'    # must be first
 
@@ -65,9 +66,9 @@ __DEFAULT_LOADING_RECIPES     = ("assets/loading.png", "Waiting to Load Recipes.
 
 __RECIPES_SCALED_IMAGE_DIR = 'recipes_scaled_images'
 
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 # Create Default Gallery Image once instead of every time from URL
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 def create_placeholder():
 
     # Create a 150x150 gray square
@@ -79,9 +80,9 @@ def create_placeholder():
     os.makedirs("assets", exist_ok=True)
     img.save('assets/loading.png')
 
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 # Configuration
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 __loaded_ingredients = []
 __current_ingredients = []
 __current_recipes = []
@@ -95,9 +96,16 @@ __recipe_gallery_items =[__DEFAULT_LOADING_RECIPES]
 __ingredients_id_map = {}
 __recipes_id_map = {}
 
-# ---------------------------------------------------------------------------
+
+# ────────────────────────────────────────────────────────────────────────────
+# Configuration - instantiate the class (Loads model to VRAM ONCE)
+# ────────────────────────────────────────────────────────────────────────────
+yolo_ingredient_classifier = yolo_utils()
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # Helper
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 
 def _format_docs(docs) -> str:
     return "\n\n".join(doc.page_content for doc in docs)
@@ -116,9 +124,9 @@ def _format_sources(docs) -> str:
     return "\n\n".join(sources)
 
 
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 # Core functions
-# ---------------------------------------------------------------------------
+# ────────────────────────────────────────────────────────────────────────────
 
 def load_ingredients() -> str:
     """Call the Spoonacular API to load the ingredients."""
@@ -318,6 +326,14 @@ def clear_recipes_ui():
         detail_body_reset + 
         detail_footer_reset
     )
+
+# ────────────────────────────────────────────────────────────────────────────
+# Image Classifier Functions
+# ────────────────────────────────────────────────────────────────────────────
+
+def classify_ingredient(image):
+    print()
+
     
 # ───────────────────────────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
