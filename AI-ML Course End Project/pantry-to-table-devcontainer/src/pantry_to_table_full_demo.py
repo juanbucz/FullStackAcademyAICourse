@@ -24,6 +24,7 @@ Environment variables:
 
 import os
 import sys
+import cv2
 import logging
 import time
 import re 
@@ -37,7 +38,7 @@ from PIL import Image, ImageDraw
 from utilities.utilities import utilities as utils
 from utilities.spoonacular_utilities import spoonacular_utilities as su
 from utilities.yolov8_utilities import yolov8_utilities as yolo_utils
-from utilities.spoonacular_ingredient_mapper_utiltities import spoonacular_ingredient_mapper_utilities as spoon_map_utils
+from utilities.spoonacular_ingredient_mapper_utilities import spoonacular_ingredient_mapper_utilities as spoon_map_utils
 
 os.environ['TF_USE_LEGACY_KERAS'] = '1'    # must be first
 
@@ -66,6 +67,8 @@ load_dotenv()
 # ─────────────────────────────────────────
 __DEFAULT_LOADING_INGREDIENTS = ("assets/loading.png", "Waiting to Load Ingredients...")
 __DEFAULT_LOADING_RECIPES     = ("assets/loading.png", "Waiting to Load Recipes...")
+
+__INGREDIENTS_IMAGES_FOLDER   = 'ingredients_images'
 
 __RECIPES_SCALED_IMAGE_DIR = 'recipes_scaled_images'
 
@@ -119,6 +122,10 @@ __loaded_ingredients = []
 __current_ingredients = []
 __current_recipes = []
 
+
+# ────────────────────────────────────────────────────────────────────────────
+# Spoonacular Ingredients Page Data Sources
+# ────────────────────────────────────────────────────────────────────────────
 create_placeholder()
 __ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
 __current_ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
@@ -128,6 +135,10 @@ __recipe_gallery_items =[__DEFAULT_LOADING_RECIPES]
 __ingredients_id_map = {}
 __recipes_id_map = {}
 
+# ────────────────────────────────────────────────────────────────────────────
+# Classified and Custom Ingredients Page Data Sources
+# ────────────────────────────────────────────────────────────────────────────
+__custom_ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration - instantiate the class (Loads model to VRAM ONCE)
@@ -169,19 +180,19 @@ def load_ingredients() -> str:
     __loaded_ingredients = su.all_ingredients
 
     # For 'List Box'
-    __ingredient_gallery_items = [(f"ingredients_images/{item['image']}", item['name']) for item in __loaded_ingredients]
+    __ingredient_gallery_items = [(f"{__INGREDIENTS_IMAGES_FOLDER}/{item['image']}", item['name']) for item in __loaded_ingredients]
 
     # For retrieving ingredient ID
     __ingredients_id_map = {index: item['id'] for index, item in enumerate(__loaded_ingredients)}
 
-    return results
+    return results, __ingredient_gallery_items
 
 def download_ingredient_images() -> str:        
     """Download the ingredient images from Spoonacular"""
     global __ingredient_gallery_items
 
-    results = su.download_ingredient_images()
-    return results, __ingredient_gallery_items, __ingredient_gallery_items
+    results = su.download_ingredient_images(__ingredient_gallery_items)
+    return results, __ingredient_gallery_items
 
 def reset_selected_ingredients() -> tuple[str, any]:
     """Reset/Clear the selected Spoonacular Ingredients."""
@@ -371,8 +382,29 @@ def classify_ingredient(image) -> Tuple[Optional[str], Optional[str]]:
 
     return ingredient_name, confidence
 
-def add_classified_ingredient():
+def add_classified_ingredient(ingredient_name, image_array):
     """ """
+    global __custom_ingredient_gallery_items
+
+    # Save a jpeg of the image with all the images on disk
+    image_path = f'{__INGREDIENTS_IMAGES_FOLDER}/classified_{ingredient_name}.jpg'
+
+    # Convert RGB (Gradio default) to BGR (OpenCV default)
+    bgr_image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+    
+    # Save the file
+    cv2.imwrite(image_path, bgr_image)
+
+    # Add to the list (alphabetical order)
+    __custom_ingredient_gallery_items.append((image_path, ingredient_name))
+
+    return __custom_ingredient_gallery_items
+
+def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
+    """ """
+    global __custom_ingredient_gallery_items
+
+    return __custom_ingredient_gallery_items
 
 # ────────────────────────────────────────────────────────────────────────────
 # Map ingredient names to Spoonacular vocabulary
@@ -589,27 +621,14 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 clear_classified_ingredient_name_btn = gr.Button("Clear Classified Ingredient")    
                                 add_classified_btn = gr.Button("Add Classified Ingredient", variant="primary")
 
-                                classify_ingredients_btn.click(
-                                    fn=classify_ingredient,
-                                    inputs=[input_image],
-                                    outputs=[classified_ingredient_name, confidence_level]
-
-                                clear_classified_ingredient_name_btn.click(
-                                    fn=lambda: (None, '', ''),
-                                    outputs=[input_image, classified_ingredient_name, confidence_level]
-                                )                                                                   
-
-                                add_classified_btn.click(
-                                    fn=add_classified_ingredient,
-                                    inputs=[input_image],
-                                    outputs=[classified_ingredient_name, confidence_level]
-
 
                         # The Additional Ingredients
                         with gr.Column(scale=2, min_width=400):
                             with gr.Group():                            
                                 gr.Markdown("### 📝 Select Additional Ingredients")
                                 
+                                gr.Textbox(value="Standard Ingredients List", interactive=False)
+
                                 meat_dropdown = gr.Dropdown(choices=MEAT_LIST, 
                                                             value=None,
                                                             label='Meat',
@@ -640,7 +659,10 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                                             multiselect=True,
                                                             label='Spices',
                                                             container=True,
-                                                            interactive=True)             
+                                                            interactive=True)       
+                                      
+                                add_standard_ingredients_btn = gr.Button("Add Standard Ingredients", variant="primary")
+                                clear_standard_ingredients_btn = gr.Button("Clear Standard Ingredients")    
 
                                 custom_ingredients = gr.Textbox(
                                                             label="Custom Ingredients (comma separated)",
@@ -651,28 +673,14 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                                 add_custom_ingredients_btn = gr.Button("Add Custom Ingredients", variant="primary")
                                 clear_custom_ingredients_btn = gr.Button("Clear Custom Ingredients")    
-                                clear_additional_ingredients_btn = gr.Button("Clear Additional Ingredients")    
-
-                            clear_custom_ingredients_btn.click(
-                                fn=lambda: (''),
-                                outputs=[custom_ingredients]
-                            )                                        
-
-                            clear_additional_ingredients_btn.click(
-                                fn=lambda: (gr.update(value=None), 
-                                            gr.update(value=None),
-                                            gr.update(value=[]),
-                                            gr.update(value=None),
-                                            gr.update(value=[])),
-                                outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
-                            )                                 
+                                
 
                          # Ingredients List
                         with gr.Column(scale=3, min_width=400):
                             with gr.Group():
                                 gr.Markdown("### 📝 Desired Ingredients")
                                 custom_ingredient_recipe_gallery = gr.Gallery(
-                                    value=__ingredient_gallery_items, 
+                                    value=__custom_ingredient_gallery_items, 
                                     elem_id="pantry_list", 
                                     columns=1, 
                                     height=600, 
@@ -680,20 +688,55 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 )
 
                                 translate_to_spoonacular_btn = gr.Button("Translate to Spoonacular", variant="primary")
-                                clear_all_ingredients_btn = gr.Button("Clear All Ingredients")                                
-                
+                                clear_all_ingredients_btn = gr.Button("Clear All Ingredients")  
 
-                )
-
-                translate_to_spoonacular_btn.click(
-                    fn=translate_ingredient_names_to_spoonacular,
+                classify_ingredients_btn.click(
+                    fn=classify_ingredient,
                     inputs=[input_image],
                     outputs=[classified_ingredient_name, confidence_level]
+                )
 
+                clear_classified_ingredient_name_btn.click(
+                    fn=lambda: (None, '', ''),
+                    outputs=[input_image, classified_ingredient_name, confidence_level]
+                )                                                                   
+
+                add_classified_btn.click(
+                    fn=add_classified_ingredient,
+                    inputs=[classified_ingredient_name, input_image],
+                    outputs=[custom_ingredient_recipe_gallery]
+                )                                                              
+
+                add_standard_ingredients_btn.click(
+                    fn=add_standard_ingredients,
+                    inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
+                    outputs=[custom_ingredient_recipe_gallery]
+                )
+
+                clear_standard_ingredients_btn.click(
+                    fn=lambda: (gr.update(value=None), 
+                                gr.update(value=None),
+                                gr.update(value=[]),
+                                gr.update(value=None),
+                                gr.update(value=[])),
+                    outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                )                                 
+              
                 add_custom_ingredients_btn.click(
                     fn=add_custom_ingredients,
                     inputs=[input_image],
                     outputs=[classified_ingredient_name, confidence_level]                    
+                )
+
+                clear_custom_ingredients_btn.click(
+                    fn=lambda: (''),
+                    outputs=[custom_ingredients]
+                )                                        
+
+                translate_to_spoonacular_btn.click(
+                    fn=translate_ingredient_names_to_spoonacular,
+                    inputs=[input_image],
+                )
 
                 clear_all_ingredients_btn.click(
                     fn=lambda: (None, 
@@ -731,7 +774,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         download_ingredient_images_btn = gr.Button("Download Ingredient Images", variant="primary")
                         with gr.Column(min_width=150):
                             reset_ingredients_btn = gr.Button("Reset Recipe Ingredients", variant="stop")
-                            clear_ingredients_btn = gr.Button("Clear All Ingredients", variant="stop")
+                            clear_ingredients_btn = gr.Button("Clear Spoonacular Ingredients", variant="stop")
 
                     gr.Markdown("### 🛒 Food Pantry Inventory")
 
@@ -743,7 +786,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 value=__ingredient_gallery_items, 
                                 label="Available Pantry", 
                                 elem_id="pantry_list", # Uses your verified CSS
-                               columns=1, 
+                                columns=1, 
                                 height=600, 
                                 interactive=True
                             )
@@ -764,7 +807,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
             load_ingredients_btn.click(
                 fn=load_ingredients,
-                outputs=[ingredient_load_status],
+                outputs=[ingredient_load_status, ingredients_gallery],
             )
 
             download_ingredient_images_btn.click(
@@ -1054,5 +1097,5 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 if __name__ == "__main__":
     # Add your specific image directories to the allowed_paths list
     pantry_to_table.launch(
-        allowed_paths=["recipes_images", "recipes_scaled_images", "ingredients_images", "assets"]
+        allowed_paths=["recipes_images", "recipes_scaled_images", __INGREDIENTS_IMAGES_FOLDER, "assets"]
     )

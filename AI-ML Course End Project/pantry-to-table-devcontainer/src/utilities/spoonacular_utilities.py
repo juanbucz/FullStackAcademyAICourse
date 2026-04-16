@@ -122,7 +122,16 @@ class spoonacular_utilities:
 
         for item in ingredients_list:
             # 1. Construct the URL
-            img_name = item['image']  # e.g., 'apple.jpg'
+
+            # [item_image, item_name] e.g., 'apple.jpg'
+            # image_name => image_path/image_name
+            # Split to get image name
+            img_name = None
+            if '/' in item[0]:
+                img_name = item[0].split('/')[1]
+            else:
+                img_name = item[0]
+
             img_url = f'{su.__INGREDIENTS_IMAGE_URL}{su.__INGREDIENTS_IMAGE_SIZE}/{img_name}'
             
             # 2. Define local save path
