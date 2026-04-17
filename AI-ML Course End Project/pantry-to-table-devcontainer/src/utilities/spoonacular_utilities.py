@@ -110,7 +110,10 @@ class spoonacular_utilities:
     
     @staticmethod
     def download_ingredient_images(ingredients_list=all_ingredients, path=__INGREDIENTS_IMAGE_DIR) -> str:
-        """Download and save images associated with loaded ingredients"""
+        """
+        Download and save images associated with loaded ingredients
+        This expects a list of tupled ingrediengs (item_image, item_name)
+        """
         su = spoonacular_utilities          # ← alias
 
         status = []
@@ -152,6 +155,38 @@ class spoonacular_utilities:
 
         return "\n".join(status)
     
+    @staticmethod
+    def download_ingredient_images(ingredients_to_download: list, path=__INGREDIENTS_IMAGE_DIR) -> set:
+        """
+        Returns a SET of standardized names that are successfully available on disk.
+        """
+        su = spoonacular_utilities
+        successful_downloads = set()
+        os.makedirs(path, exist_ok=True)
+        
+        for ingredient in ingredients_to_download:
+            img_name = f"{ingredient}.jpg"
+            save_path = os.path.join(path, img_name)
+            
+            # If it already exists, consider it a success
+            if os.path.exists(save_path):
+                successful_downloads.add(ingredient)
+                continue
+
+            try:
+                img_url = f'{su.__INGREDIENTS_IMAGE_URL}{su.__INGREDIENTS_IMAGE_SIZE}/{img_name}'
+                response = requests.get(img_url, stream=True, timeout=5)
+
+                if response.status_code == 200:
+                    with open(save_path, 'wb') as f:
+                        f.write(response.content)
+                    successful_downloads.add(ingredient)
+                    
+            except Exception:
+                pass # Error handling handled by the set check in caller
+
+        return successful_downloads
+        
     
     @staticmethod
     def load_Spoonacular_recipes(ingredients_list) -> str:

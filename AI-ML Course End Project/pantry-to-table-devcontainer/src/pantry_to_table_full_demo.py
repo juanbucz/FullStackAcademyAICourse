@@ -67,10 +67,15 @@ load_dotenv()
 # ─────────────────────────────────────────
 __DEFAULT_LOADING_INGREDIENTS = ("assets/loading.png", "Waiting to Load Ingredients...")
 __DEFAULT_LOADING_RECIPES     = ("assets/loading.png", "Waiting to Load Recipes...")
+__DEFAULT_INGREDIENT_IMAGE    = 'mystery_cloche.jpg'
+__UNKNOWN_INGREDIENT_IMAGE    = 'unknown_ingredient.jpg'
 
+__DEFAULT_IMAGES_FOLDER       = 'default_images'
 __INGREDIENTS_IMAGES_FOLDER   = 'ingredients_images'
+__RECIPES_SCALED_IMAGE_DIR    = 'recipes_scaled_images'
 
-__RECIPES_SCALED_IMAGE_DIR = 'recipes_scaled_images'
+__DEFAULT_IMAGE_PATH          = f'{__DEFAULT_IMAGES_FOLDER}/{__DEFAULT_INGREDIENT_IMAGE}'
+__UNKNOWN_INGREDIENT_PATH     = f'{__DEFAULT_IMAGES_FOLDER}/{__UNKNOWN_INGREDIENT_IMAGE}'
 
 MEAT_LIST = ['Whole Chicken', 'Chicken Breast', 'Chicken Thighs', 'Chicken Wings', 'Whole Turkey', 
              'Turkey Breast', 'Ground Turkey', 'Beef Steak', 'Beef Roast', 'Beef Stew Meat', 
@@ -164,6 +169,11 @@ def _format_sources(docs) -> str:
         sources.append(f"[{i}] {title}\n    {source}\n    \"{preview}...\"")
 
     return "\n\n".join(sources)
+
+# ────────────────────────────────────────────────────────────────────────────
+# Spoonacular Mapper Utility Class Instance (single instance)
+# ────────────────────────────────────────────────────────────────────────────
+spoon_mapper_utils = spoon_map_utils()
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -386,6 +396,21 @@ def add_classified_ingredient(ingredient_name, image_array):
     """ """
     global __custom_ingredient_gallery_items
 
+    # Check if ingredient name exists before adding
+    if any(item[1].lower() == ingredient_name.lower() for item in __custom_ingredient_gallery_items):
+        # Return the gallery, the original image, the original name, and the original confidence
+        # gr.update() - don't change anything in the associated output control
+        return (
+            __custom_ingredient_gallery_items, 
+            gr.update(), 
+            gr.update(), 
+            gr.update()
+        )
+    
+    # Remove default list place holder __DEFAULT_LOADING_INGREDIENTS
+    if __DEFAULT_LOADING_INGREDIENTS in __custom_ingredient_gallery_items:
+        __custom_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)    
+
     # Save a jpeg of the image with all the images on disk
     image_path = f'{__INGREDIENTS_IMAGES_FOLDER}/classified_{ingredient_name}.jpg'
 
@@ -398,13 +423,45 @@ def add_classified_ingredient(ingredient_name, image_array):
     # Add to the list (alphabetical order)
     __custom_ingredient_gallery_items.append((image_path, ingredient_name))
 
-    return __custom_ingredient_gallery_items
+    # Sort alphabetically
+    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])    
+
+    return __custom_ingredient_gallery_items, None, '', ''
 
 def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     """ """
     global __custom_ingredient_gallery_items
 
-    return __custom_ingredient_gallery_items
+    # Remove default list place holder __DEFAULT_LOADING_INGREDIENTS
+    if __DEFAULT_LOADING_INGREDIENTS in __custom_ingredient_gallery_items:
+        __custom_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)
+
+    new_ingredients = []
+
+    if meat is not None:
+        new_ingredients.append(meat)
+
+    if fish is not None:
+        new_ingredients.append(fish)
+
+    if isinstance(shellfish, list) and shellfish:
+        new_ingredients.extend(shellfish)
+    if pasta is not None:
+        new_ingredients.append(pasta)
+
+    if isinstance(spices, list) and spices:
+        new_ingredients.extend(spices)
+
+    # Remove any pre-exiting items from the list
+    existing_names = {item[1] for item in __custom_ingredient_gallery_items}
+    items_to_add = [name for name in new_ingredients if name not in existing_names]
+
+    __custom_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add]) 
+
+    # Sort alphabetically
+    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
+
+    return __custom_ingredient_gallery_items, None, None, [], None, []
 
 # ────────────────────────────────────────────────────────────────────────────
 # Map ingredient names to Spoonacular vocabulary
@@ -412,13 +469,109 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     
 def translate_ingredient_names_to_spoonacular():
     """ """
+    global __custom_ingredient_gallery_items
+
+    if not __current_ingredient_gallery_items:
+        return __current_ingredient_gallery_items
+
+    # Get the existing names from the gallery
+    existing_names = {item[1] for item in __custom_ingredient_gallery_items}
+
+    # Pass names into mapper for name resolution
+    ingredient_dict = spoon_mapper_utils.map_ingredients_to_spoonacular(existing_names)
+
+    # For more efficient resolution/lookups create dictionary based on gallery_items
+    # Format: { "label": "current_path" }
+    gallery_lookup = {label: path for path, label in __custom_ingredient_gallery_items}
+
+    # By examining the current gallery, figure out which ingredients need downloaded images.
+    # If it has "default image_path" it needs to have image downloaded
+    download_queue = []
+    for original_label, mapped_label in ingredient_dict.items():
+
+        # If this was a recognized ingredients
+        if mapped_label != "unknown":
+            current_path = gallery_lookup.get(original_label)
+
+            if current_path == __DEFAULT_IMAGE_PATH:
+                download_queue.append(mapped_label)
+
+    # Download images for unique ingredient names
+    successful_names = set()
+    if download_queue:
+        unique_requests = list(set(download_queue))
+        successful_names = su.download_ingredient_images(unique_requests)
+
+    updated_gallery = []
+    for original_label, mapped_label in ingredient_dict.items():
+        if original_label in gallery_lookup:
+            current_path = gallery_lookup[original_label]
+            
+            # A: Item is not food
+            if mapped_label == "unknown":
+                new_path = __UNKNOWN_INGREDIENT_PATH
+            
+            # B: Item is food AND currently a placeholder
+            elif current_path == __DEFAULT_IMAGE_PATH:
+                # Check if the download actually landed on disk
+                if mapped_label in successful_names:
+                    new_path = f"{__INGREDIENTS_IMAGES_FOLDER}/{mapped_label}.jpg"
+                else:
+                    # Fallback to default if API returned 404/Error
+                    new_path = __DEFAULT_IMAGE_PATH
+            
+            # C: Item already has a custom/scanned image
+            else:
+                new_path = current_path
+            
+            updated_gallery.append((new_path, original_label))
+
+    __custom_ingredient_gallery_items = updated_gallery    
+
+    return __custom_ingredient_gallery_items
+
+# ────────────────────────────────────────────────────────────────────────────
+# Clear/Remove ingredients from Gallery
+# ────────────────────────────────────────────────────────────────────────────
+def remove_ingredient_from_gallery(data: gr.SelectData):
+    """ """
+    global __custom_ingredient_gallery_items
+
+    # If default is the only left, return - don't do anything
+    if len(__custom_ingredient_gallery_items) == 1 and __custom_ingredient_gallery_items[0] == __DEFAULT_LOADING_INGREDIENTS:
+        return __custom_ingredient_gallery_items
+    
+    # Get the specific item clicked from the master pantry
+    clicked_item = __custom_ingredient_gallery_items[data.index] 
+    __custom_ingredient_gallery_items.remove(clicked_item)
+
+    # Add default place holder if list empty
+    if not __custom_ingredient_gallery_items:
+        __custom_ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
+
+    return __custom_ingredient_gallery_items
 
 # ────────────────────────────────────────────────────────────────────────────
 # Add Custom Ingredients
 # ────────────────────────────────────────────────────────────────────────────
 
-def add_custom_ingredients(): 
-    """ """    
+def add_custom_ingredients(custom_ingredients): 
+    """ """   
+    global __custom_ingredient_gallery_items
+
+    if not custom_ingredients:
+        return __current_ingredient_gallery_items, ''
+    
+    # Use list comprehension to split, strip, and ignore empty results
+    new_ingredients = [item.strip() for item in custom_ingredients.split(",") if item.strip()]   
+
+    # Remove any pre-exiting items from the list
+    existing_names = {item[1] for item in __custom_ingredient_gallery_items}
+    items_to_add = [name for name in new_ingredients if name not in existing_names]
+
+    __custom_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add])      
+                    
+    return  __custom_ingredient_gallery_items, ''
 
 # ────────────────────────────────────────────────────────────────────────────
 # OCR Label Scanning Functions
@@ -704,13 +857,13 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 add_classified_btn.click(
                     fn=add_classified_ingredient,
                     inputs=[classified_ingredient_name, input_image],
-                    outputs=[custom_ingredient_recipe_gallery]
+                    outputs=[custom_ingredient_recipe_gallery, input_image, classified_ingredient_name, confidence_level]
                 )                                                              
 
                 add_standard_ingredients_btn.click(
                     fn=add_standard_ingredients,
                     inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
-                    outputs=[custom_ingredient_recipe_gallery]
+                    outputs=[custom_ingredient_recipe_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
                 )
 
                 clear_standard_ingredients_btn.click(
@@ -724,8 +877,8 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
               
                 add_custom_ingredients_btn.click(
                     fn=add_custom_ingredients,
-                    inputs=[input_image],
-                    outputs=[classified_ingredient_name, confidence_level]                    
+                    inputs=[custom_ingredients],
+                    outputs=[custom_ingredient_recipe_gallery, custom_ingredients]                    
                 )
 
                 clear_custom_ingredients_btn.click(
@@ -735,8 +888,11 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                 translate_to_spoonacular_btn.click(
                     fn=translate_ingredient_names_to_spoonacular,
-                    inputs=[input_image],
+                    outputs=[custom_ingredient_recipe_gallery]
                 )
+
+                custom_ingredient_recipe_gallery.select(fn=remove_ingredient_from_gallery, 
+                                       outputs=[custom_ingredient_recipe_gallery]) 
 
                 clear_all_ingredients_btn.click(
                     fn=lambda: (None, 
