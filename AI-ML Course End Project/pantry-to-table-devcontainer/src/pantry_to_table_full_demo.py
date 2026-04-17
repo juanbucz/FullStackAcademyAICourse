@@ -143,7 +143,8 @@ __recipes_id_map = {}
 # ────────────────────────────────────────────────────────────────────────────
 # Classified and Custom Ingredients Page Data Sources
 # ────────────────────────────────────────────────────────────────────────────
-__custom_ingredient_gallery_items =[__DEFAULT_LOADING_INGREDIENTS]
+__custom_ingredient_gallery_items = [__DEFAULT_LOADING_INGREDIENTS]
+__llm_spoonacular_mapping_results = []
 
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration - instantiate the class (Loads model to VRAM ONCE)
@@ -469,7 +470,7 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     
 def translate_ingredient_names_to_spoonacular():
     """ """
-    global __custom_ingredient_gallery_items
+    global __custom_ingredient_gallery_items, __llm_spoonacular_mapping_results
 
     if not __current_ingredient_gallery_items:
         return __current_ingredient_gallery_items
@@ -483,6 +484,11 @@ def translate_ingredient_names_to_spoonacular():
     # For more efficient resolution/lookups create dictionary based on gallery_items
     # Format: { "label": "current_path" }
     gallery_lookup = {label: path for path, label in __custom_ingredient_gallery_items}
+    
+    if __llm_spoonacular_mapping_results:
+        __llm_spoonacular_mapping_results.clear()
+
+    __llm_spoonacular_mapping_results = [(label, mapped_label) for label, mapped_label in ingredient_dict.items()]
 
     # By examining the current gallery, figure out which ingredients need downloaded images.
     # If it has "default image_path" it needs to have image downloaded
@@ -526,9 +532,31 @@ def translate_ingredient_names_to_spoonacular():
             
             updated_gallery.append((new_path, original_label))
 
+    # Sort alphabetically
     __custom_ingredient_gallery_items = updated_gallery    
+    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
 
-    return __custom_ingredient_gallery_items
+    return __custom_ingredient_gallery_items, __llm_spoonacular_mapping_results
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Load classified/translated ingredients from ingredient management to recipe management
+# ────────────────────────────────────────────────────────────────────────────
+def load_ingredients_into_recipe_management():
+    """ """
+    global __current_ingredient_gallery_items, __custom_ingredient_gallery_items, __current_ingredients
+
+    if __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.clear()
+
+    if __current_ingredients:
+        __current_ingredients.clear()
+
+    __current_ingredient_gallery_items.extend(__custom_ingredient_gallery_items)
+    __current_ingredients = [label for _, label in __custom_ingredient_gallery_items]
+
+    return __current_ingredient_gallery_items
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Clear/Remove ingredients from Gallery
@@ -549,7 +577,24 @@ def remove_ingredient_from_gallery(data: gr.SelectData):
     if not __custom_ingredient_gallery_items:
         __custom_ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
 
+    # Sort alphabetically
+    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
     return __custom_ingredient_gallery_items
+
+def clear_all_ingredients():
+    """ """
+    global __ingredient_gallery_items, __llm_spoonacular_mapping_results
+    
+    __ingredient_gallery_items.clear()
+    __ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
+
+    __custom_ingredient_gallery_items.clear()
+    __custom_ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
+
+    if __llm_spoonacular_mapping_results:
+        __llm_spoonacular_mapping_results.clear()
+
+    return None, '', '', None, None, [], None, [], '', __ingredient_gallery_items, __llm_spoonacular_mapping_results
 
 # ────────────────────────────────────────────────────────────────────────────
 # Add Custom Ingredients
@@ -778,7 +823,8 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         # The Additional Ingredients
                         with gr.Column(scale=2, min_width=400):
                             with gr.Group():                            
-                                gr.Markdown("### 📝 Select Additional Ingredients")
+                                gr.Markdown("### 📝 Select Additional Ingredients",
+                                            label='')
                                 
                                 gr.Textbox(value="Standard Ingredients List", interactive=False)
 
@@ -841,7 +887,15 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 )
 
                                 translate_to_spoonacular_btn = gr.Button("Translate to Spoonacular", variant="primary")
+                                spoonacular_ingredients_to_recipe_btn = gr.Button("Load Ingredients into Recipe Management", variant="primary")
                                 clear_all_ingredients_btn = gr.Button("Clear All Ingredients")  
+
+                                gr.Markdown("### 📝 LLM Spoonacular Mapping Results")
+                                llm_results_dataframe = gr.DataFrame(
+                                    value=__llm_spoonacular_mapping_results, 
+                                    headers=["Raw Label", "Spoonacular Match"],
+                                    datatype=["str", "str"]
+                                )
 
                 classify_ingredients_btn.click(
                     fn=classify_ingredient,
@@ -888,26 +942,17 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                 translate_to_spoonacular_btn.click(
                     fn=translate_ingredient_names_to_spoonacular,
-                    outputs=[custom_ingredient_recipe_gallery]
+                    outputs=[custom_ingredient_recipe_gallery, llm_results_dataframe]
                 )
 
                 custom_ingredient_recipe_gallery.select(fn=remove_ingredient_from_gallery, 
                                        outputs=[custom_ingredient_recipe_gallery]) 
 
                 clear_all_ingredients_btn.click(
-                    fn=lambda: (None, 
-                                '', 
-                                '', 
-                                gr.update(value=None), 
-                                gr.update(value=None),
-                                gr.update(value=[]),
-                                gr.update(value=None),
-                                gr.update(value=[]),
-                                '',
-                                __ingredient_gallery_items),
+                    fn=clear_all_ingredients,
                     outputs=[input_image, classified_ingredient_name, confidence_level, meat_dropdown,
                              fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, 
-                             custom_ingredients, custom_ingredient_recipe_gallery]
+                             custom_ingredients, custom_ingredient_recipe_gallery, llm_results_dataframe]
                 )                     
 
 
@@ -1097,6 +1142,11 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 detail_diets = gr.Textbox(label="Diets", interactive=False)
                             with gr.Column(scale=2, min_width=350):    
                                 detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
+
+            spoonacular_ingredients_to_recipe_btn.click(
+                    fn=load_ingredients_into_recipe_management,
+                    outputs=[selected_ingredients_gallery]
+                )                                
 
             def toggle_selected_ingredient(data: gr.SelectData):
                 global __current_ingredients, __current_ingredient_gallery_items, __ingredient_gallery_items

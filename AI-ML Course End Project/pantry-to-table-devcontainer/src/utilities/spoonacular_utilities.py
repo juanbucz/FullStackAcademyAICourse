@@ -41,7 +41,7 @@ class spoonacular_utilities:
     __RECIPES_IMAGE_DIR         = 'recipes_images'
     __RECIPES_SCALED_IMAGE_DIR  = 'recipes_scaled_images'
     __RECIPES_SCALED_IMAGE_SIZE = (100,100)
-    __RECIPE_DEFAULT_IMAGE      = 'assets/default_recipe.jpg'
+    __RECIPE_DEFAULT_IMAGE      = 'default_images/default_recipe.jpg'
 
     # ─────────────────────────────────────────
     # Member variables

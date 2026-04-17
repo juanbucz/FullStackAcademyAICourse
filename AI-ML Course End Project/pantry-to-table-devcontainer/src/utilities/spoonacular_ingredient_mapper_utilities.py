@@ -2,6 +2,22 @@
 # ──────────────────────────────────────────────────────────────────────────────────────────
 # Utility functions for mapping ingredients to Spoonacular Ingredient Vocabulary via LLM
 # ──────────────────────────────────────────────────────────────────────────────────────────
+"""
+    Predicted Ingredient to Spoonacular Ingredient Name Mapper
+
+    To install ollama in VS Code DevContainer (via Terminal)
+
+   sed -i 's|http://archive.ubuntu.com|https://mirrors.edge.kernel.org|g; s|http://security.ubuntu.com|https://mirrors.edge.kernel.org|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null
+   apt-get update && apt-get install -y zstd
+
+    apt-get update && apt-get install -y zstd
+    curl -fsSL https://ollama.com/install.sh | sh
+
+    To start up ollama client locally:
+
+    $ ollama serve
+    $ ollama pull qwen2.5:3b
+"""
 
 import os
 from dotenv import load_dotenv
@@ -75,35 +91,37 @@ class spoonacular_ingredient_mapper_utilities:
         # ─────────────────────────────────────────
         # Prompt Definitions
         # ─────────────────────────────────────────
+        #                 - Use singular nouns where appropriate.
         self.system_prompt = """
             You are a specialized data mapping assistant for the Spoonacular Recipe API.
 
-            Your Goal: Convert raw vision model labels into a standardized JSON dictionary.
+            Your Goal: Convert raw ingredient labels into a standardized JSON dictionary for recipe searching.
 
             Rules:
             1. **Output Format**: Return ONLY a valid JSON object.
-            2. **Key Preservation**: The Key must be EXACTLY the same string as provided in the input, preserving all underscores, spaces, and capitalization. This is critical for UI file resolution.
-            3. **Value Standardization & Simplification**: 
-            - The Value is the standardized Spoonacular name.
-            - Use singular nouns.
-            - Simplify varieties to base categories (e.g., 'Idaho potato' -> 'potato', 'red_bell_pepper' -> 'bell pepper').
-            4. **Filter Unknowns**: Map non-food items to the string "unknown".
+            2. **Key Preservation**: The Key must be EXACTLY the same string as provided in the input list. Do not add underscores, change case, or modify punctuation in the Key.
+            3. **Value Standardization (Culinary Specificity)**: 
+                - Keep essential culinary forms and cuts (e.g., 'chicken thigh', 'garlic powder', 'tomato paste', 'sirloin tips').
+                - Strip marketing adjectives and regional varieties (e.g., 'Organic Fuji Apple' -> 'apple', 'Idaho potato' -> 'potato').
+                - Do NOT over-generalize specific ingredients into broad categories (e.g., do NOT map 'linguine' to 'pasta' or 'basil' to 'herb').
+
+            4. **Filter Unknowns**: Map clearly non-food items to the string "unknown".
 
             ### FEW-SHOT EXAMPLES:
-            Input: [red_onions, yellow onion, stainless_steel_knife]
-            Output: {{"red_onions": "onion", "yellow onion": "onion", "stainless_steel_knife": "unknown"}}
+            Input: ["Garlic Powder", "Fresh Basil", "Linguine pasta"]
+            Output: {{"Garlic Powder": "garlic-powder", "Fresh Basil": "basil", "Linguine pasta": "linguine"}}
 
-            Input: [idaho_potatoes, russet potato, blue_ceramic_bowl]
-            Output: {{"idaho_potatoes": "potato", "russet potato": "potato", "blue_ceramic_bowl": "unknown"}}
+            Input: ["Chicken Thighs", "Boneless Chicken Breast", "Kitchen Scale"]
+            Output: {{"Chicken Thighs": "chicken-thigh", "Boneless Chicken Breast": "chicken-breast", "Kitchen Scale": "unknown"}}
 
-            Input: [fuji_apples, Granny Smith Apple, plastic_bag]
-            Output: {{"fuji_apples": "apple", "Granny Smith Apple": "apple", "plastic_bag": "unknown"}}
+            Input: ["Russet Potatoes", "Granny Smith Apples", "Tomato Paste"]
+            Output: {{"Russet Potatoes": "potato", "Granny Smith Apples": "apple", "Tomato Sauce": "tomato-sauce-or-pasta-sauce"}}
 
-            Input: [red_bell_pepper, Green Bell Pepper, battery]
-            Output: {{"red_bell_pepper": "bell pepper", "Green Bell Pepper": "bell pepper", "battery": "unknown"}}
+            Input: ["Red Bell Pepper", "Sharp Cheddar Cheese", "Cardboard Box"]
+            Output: {{"Red Bell Pepper": "bell-pepper", "Sharp Cheddar Cheese": "cheddar-cheese", "Cardboard Box": "unknown"}}
 
-            Input: [ham_slices, Honey Ham, wooden_table]
-            Output: {{"ham_slices": "ham", "Honey Ham": "ham", "wooden_table": "unknown"}}
+            Input: ["Iceberg Lettuce", "Ground Beef", "Beets"]
+            Output: {{"Iceberg Lettuce": "iceberg-lettuce", "Ground Beef": "fresh-ground-beef", "Beets": "beet"}}
             """
 
 

@@ -3,7 +3,7 @@
 
     To install ollama in VS Code DevContainer (via Terminal)
 
-sed -i 's|http://archive.ubuntu.com|https://mirrors.edge.kernel.org|g; s|http://security.ubuntu.com|https://mirrors.edge.kernel.org|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null
+   sed -i 's|http://archive.ubuntu.com|https://mirrors.edge.kernel.org|g; s|http://security.ubuntu.com|https://mirrors.edge.kernel.org|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null
    apt-get update && apt-get install -y zstd
 
     apt-get update && apt-get install -y zstd
