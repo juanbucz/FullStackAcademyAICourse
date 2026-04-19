@@ -97,33 +97,33 @@ __RECIPES_SCALED_IMAGE_DIR    = 'recipes_scaled_images'
 __DEFAULT_IMAGE_PATH          = f'{__DEFAULT_IMAGES_FOLDER}/{__DEFAULT_INGREDIENT_IMAGE}'
 __UNKNOWN_INGREDIENT_PATH     = f'{__DEFAULT_IMAGES_FOLDER}/{__UNKNOWN_INGREDIENT_IMAGE}'
 
-MEAT_LIST = ['Whole Chicken', 'Chicken Breast', 'Chicken Thighs', 'Chicken Wings', 'Whole Turkey', 
-             'Turkey Breast', 'Ground Turkey', 'Beef Steak', 'Beef Roast', 'Beef Stew Meat', 
-             'Ground Beef', 'Pork Chops', 'Pork Tenderloin', 'Pork Shoulder', 'Bacon', 'Ground Pork', 
-             'Lamb Chops', 'Ground Lamb', 'Venison']
+MEAT_LIST = ['Bacon', 'Beef Roast', 'Beef Steak', 'Beef Stew Meat', 'Chicken Breast', 'Chicken Thighs', 
+             'Chicken Wings', 'Ground Beef', 'Ground Lamb', 'Ground Pork', 'Ground Turkey', 
+             'Lamb Chops', 'Pork Chops', 'Pork Shoulder', 'Pork Tenderloin', 'Turkey Breast', 
+             'Venison', 'Whole Chicken', 'Whole Turkey']
 
-SEAFOOD_LIST = ['Salmon', 'Tuna', 'Canned Tuna', 'Cod', 
-                'Tilapia', 'Halibut', 'Trout', 'Snapper', 'Sea Bass', 'Blue Fish', 
-                'Mackerel', 'Sardines', 'Anchovies', 'Swordfish']
+SEAFOOD_LIST = ['Anchovies', 'Blue Fish', 'Canned Tuna', 'Cod', 'Halibut', 'Mackerel', 
+                'Salmon', 'Sardines', 'Sea Bass', 'Snapper', 'Swordfish', 'Tilapia', 
+                'Trout', 'Tuna']
 
 SHELLFISH_LIST = ['Shrimp', 'Whole Lobster', 'Lobster Tail', 'Crab Legs', 'Whole Crab', 'Soft Shell Crab', 
                   'Clams', 'Mussels', 'Oysters', 'Scallops', 'Calamari', 'Squid', 'Octopus', 'Crawfish']
 
-CHEESE_LIST = ['Cheddar', 'Mozzarella', 'Parmesan', 'Provolone', 'Swiss', 'Monterey Jack', 'Feta', 
-               'Goat Cheese', 'Blue Cheese', 'Brie', 'Gouda', 'Gruyère', 'Ricotta', 'Cream Cheese', 
-               'Cottage Cheese', 'Camembert', 'Havarti', 'Pepper Jack', 'Muenster', 'Provolone']
+CHEESE_LIST = ['Blue Cheese', 'Brie', 'Camembert', 'Cheddar', 'Cottage Cheese', 'Cream Cheese', 'Feta', 
+               'Goat Cheese', 'Gouda', 'Gruyère', 'Havarti', 'Monterey Jack', 'Mozzarella', 'Muenster', 
+               'Parmesan', 'Pepper Jack', 'Provolone', 'Provolone', 'Ricotta', 'Swiss']
 
 PASTA_LIST = ['Angel Hair', 'Bow Tie', 'Cannelloni', 'Cavatappi', 'Egg Noodles', 'Elbow Macaroni', 'Farfalle',
               'Fettuccine', 'Fusilli', 'Gnocchi', 'Lasagna Sheets', 'Linguine', 'Manicotti', 'Orzo', 'Pappardelle', 
               'Penne', 'Ravioli', 'Rigatoni', 'Rotini', 'Spaghetti', 'Tortellini', 'Ziti']
 
-SPICE_LIST = ['Allspice', 'Anise', 'Cardamom', 'Cayenne Pepper', 'Chili Powder', 'Cinnamon', 'Cloves', 
+SPICE_LIST = ['Allspice', 'Anise', 'Basil', 'Cardamom', 'Cayenne Pepper', 'Chili Powder', 'Cinnamon', 'Cloves', 
               'Coriander', 'Cumin', 'Curry Powder', 'Fennel Seed', 'Garlic Powder', 'Ginger', 
-              'Mustard Powder', 'Nutmeg', 'Onion Powder', 'Paprika', 'Red Pepper Flakes', 'Smoked Paprika', 
+              'Mustard Powder', 'Nutmeg', 'Onion Powder', 'Oregano', 'Paprika', 'Red Pepper Flakes', 'Smoked Paprika', 
               'Star Anise', 'Sumac', 'Turmeric']
 
 OIL_LIST = ['Avocado Oil', 'Canola Oil', 'Coconut Oil', 'Corn Oil', 'Extra Virgin Olive Oil', 'Grapeseed Oil', 
-            'Peanut Oil', 'Safflower Oil', 'Sesame Oil', 'Sunflower Oil', 'Vegetable Oil', 'Walnut Oil']
+            'Olive Oil', 'Peanut Oil', 'Safflower Oil', 'Sesame Oil', 'Sunflower Oil', 'Vegetable Oil', 'Walnut Oil']
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -143,9 +143,11 @@ def create_placeholder():
 # ────────────────────────────────────────────────────────────────────────────
 # Configuration
 # ────────────────────────────────────────────────────────────────────────────
-__loaded_ingredients = []
+__NO_RECIPE_SELECTED  = -1
+__loaded_ingredients  = []
 __current_ingredients = []
-__current_recipes = []
+__current_recipes     = []
+__current_recipe_id   = __NO_RECIPE_SELECTED
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -368,6 +370,11 @@ def parse_recipe_details(json_data):
 def load_recipe_details(recipe_id, recipe_name) -> tuple[str, any]:
     """Load recipe details for the selected Spoonacular recipe."""
     
+    if recipe_id is None or recipe_name is None:
+              return (
+                    None, None,  None, None, None, None, None, None, None, None, None, None, None, None
+                )
+    
     results = su.load_recipe_details(recipe_id, recipe_name)
     recipe_details = su.current_recipe_details
     return parse_recipe_details(recipe_details)
@@ -439,7 +446,7 @@ def add_classified_ingredient(ingredient_name, image_array):
     global __current_ingredient_gallery_items
 
     # Check if ingredient name exists before adding
-    if any(item[1].lower() == ingredient_name.lower() for item in __custom_ingredient_gallery_items):
+    if any(item[1].lower() == ingredient_name.lower() for item in __current_ingredient_gallery_items):
         # Return the gallery, the original image, the original name, and the original confidence
         # gr.update() - don't change anything in the associated output control
         return (
@@ -466,11 +473,11 @@ def add_classified_ingredient(ingredient_name, image_array):
     __current_ingredient_gallery_items.append((image_path, ingredient_name))
 
     # Sort alphabetically
-    __current_ingredient_gallery_items.sort(key=lambda x: x[1])    
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1].lower())    
 
     return __current_ingredient_gallery_items, None, '', ''
 
-def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
+def add_standard_ingredients(meat, fish, shellfish, pasta, spices, oils, cheeses):
     """ """
     global __current_ingredient_gallery_items
 
@@ -494,6 +501,13 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     if isinstance(spices, list) and spices:
         new_ingredients.extend(spices)
 
+    if isinstance(oils, list) and oils:
+        new_ingredients.extend(oils)
+
+    if isinstance(cheeses, list) and cheeses:
+        new_ingredients.extend(cheeses)
+
+
     # Remove any pre-exiting items from the list
     existing_names = {item[1] for item in __current_ingredient_gallery_items}
     items_to_add = [name for name in new_ingredients if name not in existing_names]
@@ -501,9 +515,9 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add]) 
 
     # Sort alphabetically
-    __current_ingredient_gallery_items.sort(key=lambda x: x[1])
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1].lower())
 
-    return __current_ingredient_gallery_items, None, None, [], None, []
+    return __current_ingredient_gallery_items, None, None, [], None, [], [], []
 
 # ────────────────────────────────────────────────────────────────────────────
 # Map ingredient names to Spoonacular vocabulary
@@ -575,28 +589,9 @@ def translate_ingredient_names_to_spoonacular():
 
     # Sort alphabetically
     __custom_ingredient_gallery_items = updated_gallery    
-    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
+    __custom_ingredient_gallery_items.sort(key=lambda x: x[1].lower())
 
     return __custom_ingredient_gallery_items, __llm_spoonacular_mapping_results
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# Load classified/translated ingredients from ingredient management to recipe management
-# ────────────────────────────────────────────────────────────────────────────
-def load_ingredients_into_recipe_management():
-    """ """
-    global __current_ingredient_gallery_items, __custom_ingredient_gallery_items, __current_ingredients
-
-    if __current_ingredient_gallery_items:
-        __current_ingredient_gallery_items.clear()
-
-    if __current_ingredients:
-        __current_ingredients.clear()
-
-    __current_ingredient_gallery_items.extend(__custom_ingredient_gallery_items)
-    __current_ingredients = [label for _, label in __custom_ingredient_gallery_items]
-
-    return __current_ingredient_gallery_items
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -604,23 +599,23 @@ def load_ingredients_into_recipe_management():
 # ────────────────────────────────────────────────────────────────────────────
 def remove_ingredient_from_gallery(data: gr.SelectData):
     """ """
-    global __custom_ingredient_gallery_items
+    global __current_ingredient_gallery_items
 
     # If default is the only left, return - don't do anything
-    if len(__custom_ingredient_gallery_items) == 1 and __custom_ingredient_gallery_items[0] == __DEFAULT_LOADING_INGREDIENTS:
-        return __custom_ingredient_gallery_items
+    if len(__current_ingredient_gallery_items) == 1 and __current_ingredient_gallery_items[0] == __DEFAULT_LOADING_INGREDIENTS:
+        return __current_ingredient_gallery_items
     
     # Get the specific item clicked from the master pantry
-    clicked_item = __custom_ingredient_gallery_items[data.index] 
-    __custom_ingredient_gallery_items.remove(clicked_item)
+    clicked_item = __current_ingredient_gallery_items[data.index] 
+    __current_ingredient_gallery_items.remove(clicked_item)
 
     # Add default place holder if list empty
-    if not __custom_ingredient_gallery_items:
-        __custom_ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
+    if not __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.append(__DEFAULT_LOADING_INGREDIENTS)
 
     # Sort alphabetically
-    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
-    return __custom_ingredient_gallery_items
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1].lower())
+    return __current_ingredient_gallery_items
 
 def clear_all_ingredients():
     """ """
@@ -655,13 +650,79 @@ def add_custom_ingredients(custom_ingredients):
     existing_names = {item[1] for item in __custom_ingredient_gallery_items}
     items_to_add = [name for name in new_ingredients if name not in existing_names]
 
-    __custom_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add])      
+    __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add])      
                     
-    return  __custom_ingredient_gallery_items, ''
+    return  __current_ingredient_gallery_items, ''
 
 # ────────────────────────────────────────────────────────────────────────────
-# OCR Label Scanning Functions
-# ────────────────────────────────────────────────────────────────────────────    
+# Recipe Management Functions
+# ────────────────────────────────────────────────────────────────────────────
+
+def load_recipes():
+    """Call the Spoonacular API to load the recipes and images."""
+    global __current_ingredient_gallery_items, __current_ingredients, __current_recipes, __recipe_gallery_items, __recipes_id_map
+
+    __current_ingredients = [label for _, label in __current_ingredient_gallery_items]
+    results = su.load_Spoonacular_recipes(__current_ingredients)
+    results = su.download_recipe_images()
+
+    # Load ingredients for display/selection
+    __current_recipes = su.current_recipes
+
+    # For 'List Box'
+    __recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
+
+    # For retrieving ingredient ID
+    __recipes_id_map = {index: item['id'] for index, item in enumerate(__current_recipes)}       
+
+    return __recipe_gallery_items 
+
+def restart_recipes():
+    """ 
+    Resets all global variables and returns default values 
+    for every UI component in the Recipe Management tab.
+    """
+    global __current_ingredients, __current_recipes, __current_ingredient_gallery_items, __recipe_gallery_items
+
+    # 1. Reset Global State
+    __current_ingredients = []
+    __current_recipes = []
+    __current_ingredient_gallery_items = [__DEFAULT_LOADING_INGREDIENTS]
+    __recipe_gallery_items = [__DEFAULT_LOADING_RECIPES]
+
+    # 2. Return Cleared Values (Matches the order in the .click outputs)
+    return (
+        None, "", "", False,   # Image, Name, Confidence, OCR Checkbox
+        None, None, [],        # Meat, Fish, Shellfish
+        None, [], [], [],      # Pasta, Spices, Oils, Cheeses
+        "",                    # Custom Ingredients Textbox
+        [__DEFAULT_LOADING_INGREDIENTS], # Selected Ingredients Gallery
+        [__DEFAULT_LOADING_RECIPES],     # Recipe Gallery
+        
+        # Recipe Summary Section
+        "", 0, 0, "", 0, "", None, None,
+        
+        # Recipe Details Section
+        "<h2>📜 Select a Recipe to See Details</h2>", # detail_title
+        "", 0, 0, "", "",      # source, score, price, dishtypes, summary
+        "", None, "",          # ingredients, image, instructions
+        "", "", {}, "", ""     # wine, cuisines, taste, diets, nutrition
+    )
+
+def load_ingredients_into_recipe_management():
+    """ """
+    global __current_ingredient_gallery_items, __custom_ingredient_gallery_items, __current_ingredients
+
+    if __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.clear()
+
+    if __current_ingredients:
+        __current_ingredients.clear()
+
+    __current_ingredient_gallery_items.extend(__custom_ingredient_gallery_items)
+    __current_ingredients = [label for _, label in __custom_ingredient_gallery_items]
+
+    return __current_ingredient_gallery_items   
 
 # ───────────────────────────────────────────────────────────────────────────
 # ---------------------------------------------------------------------------
@@ -727,7 +788,6 @@ button[aria-label="Clear"], button[aria-label="Upload"] {
     background: white !important;
 }
 
-
 /* 5. SELECTION FEEDBACK */
 /* Adds a subtle color so you know it was clicked without it growing large */
 #pantry_list .thumbnail-item.selected {
@@ -763,6 +823,66 @@ button[aria-label="Clear"], button[aria-label="Upload"] {
 /* 8. DISABLE PREVIEW MODE LIGHTBOX */
 .preview {
     display: none !important;
+}
+
+/* 1. Force the button to a fixed height to match your checkbox row */
+#pantry_image_x_btn {
+    padding: 0px !important;
+    height: 45px !important; 
+    min-height: 45px !important;
+    width: 45px !important;
+    min-width: 45px !important;
+    overflow: hidden !important;
+}
+
+/* 2. Target the internal Gradio flex container */
+#pantry_image_x_btn > div {
+    height: 100% !important;
+    width: 100% !important;
+    padding: 0px !important;
+    gap: 0px !important; /* Removes the space Gradio keeps for text */
+}
+
+/* 3. Make the image fill the entire container */
+#pantry_image_x_btn img {
+    height: 100% !important;
+    width: 100% !important;
+    max-height: 100% !important;
+    object-fit: cover !important; /* Crops the JPEG to fill the square */
+    margin: 0 !important;
+}
+
+/* 4. Completely remove the text span so it doesn't take up 1px of space */
+#pantry_image_x_btn span {
+    display: none !important;
+}
+
+/* Target the specific button by its ID */
+#load_recipes_full_btn {
+    background-color: #28a745 !important; /* Standard Green */
+    color: white !important;              /* White Text */
+    height: 100% !important;              /* Fill vertical space */
+    min-height: 120px !important;         /* Adjust this to match your UI gap */
+    width: 100% !important;               /* Fill horizontal space */
+    font-size: 1.5em !important; /* Adjust to match Load Recipes */
+    font-weight: bold !important;
+    border: none !important;
+    border-radius: 8px !important;        /* Matches your other controls */
+    cursor: pointer !important;
+}
+
+/* Optional: Add a hover effect so it feels interactive */
+#load_recipes_full_btn:hover {
+    background-color: #218838 !important; /* Slightly darker green */
+}
+
+#restart_btn {
+    grid-row: span 2; 
+    background-color: #b91c1c !important; /* Tailwind-style red */
+    color: white !important;
+    font-size: 1.5em !important; /* Adjust to match Load Recipes */
+    font-weight: bold !important;
+    border: none !important;
 }
 """
 
@@ -846,7 +966,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                                 classified_ingredient_name1 = gr.Textbox(
                                                                     label="Ingredient Name",
-                                                                    placeholder="e.g., olive oil, mustard, heavy cream",
+                                                                    placeholder="e.g., basil, olive oil, mustard",
                                                                     interactive=False,
                                                                     lines=2
                                                                 )
@@ -913,13 +1033,13 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                                 custom_ingredients = gr.Textbox(
                                                             label="Custom Ingredients (comma separated)",
-                                                            placeholder="e.g., olive oil, mustard, heavy cream",
+                                                            placeholder="e.g., basil, olive oil, mustard",
                                                             lines=2,
                                                             interactive=True
                                                         )
 
                                 add_custom_ingredients_btn = gr.Button("Add Custom Ingredients", variant="primary")
-                                clear_custom_ingredients_btn = gr.Button("Clear Custom Ingredients")    
+                                restart_recipes_btn = gr.Button("Clear Custom Ingredients")    
                                 
 
                          # Ingredients List
@@ -987,7 +1107,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 #     outputs=[custom_ingredient_recipe_gallery, custom_ingredients]                    
                 # )
 
-                # clear_custom_ingredients_btn.click(
+                # restart_recipes_btn.click(
                 #     fn=lambda: (''),
                 #     outputs=[custom_ingredients]
                 # )                                        
@@ -1088,7 +1208,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         get_recipes_btn = gr.Button("Load Spoonacular Recipes", variant="primary", visible=False)
                         download_recipe_images_btn = gr.Button("Download Recipe Images", variant="primary", visible=False)
                         with gr.Column(min_width=150):
-                            load_recipe_button = gr.Button("Load Selected Recipe", variant="primary", visible=False)
+                            load_recipe_button1 = gr.Button("Load Selected Recipe", variant="primary", visible=False)
                             clear_recipes_btn = gr.Button("Clear All Recipe Data", variant="stop", visible=False)
 
                     with gr.Row():
@@ -1107,7 +1227,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 
                                     classified_ingredient_name = gr.Textbox(
                                                                         label="Ingredient Name",
-                                                                        placeholder="e.g., olive oil, mustard, heavy cream",
+                                                                        placeholder="e.g., basil, olive oil, mustard",
                                                                         interactive=False,
                                                                         lines=2,
                                                                         scale=7
@@ -1120,15 +1240,32 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                                                 scale=1,
                                                                 min_width=80
                                                             )
-                                
-                                use_ocr_scanning_cb = gr.Checkbox(
+
+                                with gr.Row():
+                                    use_ocr_scanning_cb = gr.Checkbox(
                                         label="Enable OCR Image Scanning", 
                                         value=__use_ocr_image_scanning,
-                                        info='Check this to add ingredient labels scanning.'
+                                        info='Check this to add ingredient labels scanning.',
+                                        scale=16 
+                                    )
+                                    
+                                    clear_classified_ingredient_btn = gr.Button(
+                                        value="", 
+                                        icon="default_images/red_x.jpg", 
+                                        variant="secondary",
+                                        min_width=40,
+                                        elem_id="pantry_image_x_btn",
+                                        scale=1
                                     )
 
                                 classify_ingredients_btn = gr.Button("Classify Ingredient", variant="primary")
-                                add_classified_btn = gr.Button("Add Classified Ingredient", variant="huggingface")                            
+                                add_classified_btn = gr.Button("Add Classified Ingredient", variant="huggingface")     
+
+                                with gr.Row():
+                                        load_recipes_btn = gr.Button(
+                                            "Load Recipes", 
+                                            elem_id="load_recipes_full_btn"
+                                        )                                                       
 
                         with gr.Column(scale=2):                            
 
@@ -1187,15 +1324,26 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 
                             add_standard_ingredients_btn = gr.Button("Add Standard Ingredients", variant="huggingface")
 
-                            custom_ingredients = gr.Textbox(
-                                                        label="Custom Ingredients (comma separated)",
-                                                        placeholder="e.g., olive oil, mustard, heavy cream",
-                                                        lines=2,
-                                                        interactive=True
-                                                    )
+                            with gr.Row():
+                                custom_ingredients = gr.Textbox(
+                                                            label="Custom Ingredients (comma separated)",
+                                                            placeholder="e.g., basil, olive oil, mustard",
+                                                            lines=2,
+                                                            interactive=True,
+                                                            scale=16
+                                                        )
+                                
+                                add_custom_ingredients_btn = gr.Button(
+                                            value="", 
+                                            icon="default_images/green_checkmark.jpg", 
+                                            variant="secondary",
+                                            min_width=40,
+                                            elem_id="pantry_image_x_btn",
+                                            scale=1
+                                        )
 
-                            add_custom_ingredients_btn = gr.Button("Add Custom Ingredients", variant='huggingface')
-                            clear_custom_ingredients_btn = gr.Button("Restart Recipe", variant='stop')    
+                            restart_recipes_btn = gr.Button("Restart Recipe",
+                                                            elem_id='restart_btn')    
 
 
                     selected_indices = gr.State([])
@@ -1272,6 +1420,10 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                     interactive=False
                                 )
 
+                        load_recipe_button = gr.Button("Load Selected Recipe", 
+                                                        elem_id="load_recipes_full_btn")
+
+
                     recipe_load_status = gr.Textbox(label="Recipes Status", 
                                                     lines=4, 
                                                     interactive=False, 
@@ -1327,10 +1479,14 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
                                 
 
-
                 use_ocr_scanning_cb.change(
                     fn=update_ocr_scanning_flag, 
-                    inputs=[use_ocr_scanning_cb])                  
+                    inputs=[use_ocr_scanning_cb])            
+
+                clear_classified_ingredient_btn.click(
+                    fn=lambda: (None, '', ''),
+                    outputs=[input_image, classified_ingredient_name, confidence_level]
+                )       
 
                 classify_ingredients_btn.click(
                     fn=classify_ingredient,
@@ -1346,8 +1502,8 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                 add_standard_ingredients_btn.click(
                     fn=add_standard_ingredients,
-                    inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
-                    outputs=[selected_ingredients_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                    inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, oil_dropdown, cheese_dropdown],
+                    outputs=[selected_ingredients_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, oil_dropdown, cheese_dropdown]
                 )
 
                 clear_standard_ingredients_btn.click(
@@ -1365,18 +1521,44 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     outputs=[selected_ingredients_gallery, custom_ingredients]                    
                 )
 
-                clear_custom_ingredients_btn.click(
-                    fn=lambda: (''),
-                    outputs=[custom_ingredients]
-                )                                        
+                load_recipes_btn.click(
+                    fn=load_recipes,
+                    outputs=[recipe_gallery]
+                )
+
+                restart_recipes_btn.click(
+                    fn=restart_recipes,
+                    outputs=[
+                        # Ingredient Classification Section
+                        input_image, classified_ingredient_name, confidence_level, use_ocr_scanning_cb,
+                        
+                        # Standard Ingredients Section
+                        meat_dropdown, fish_dropdown, shellfish_dropdown, 
+                        pasta_dropdown, spice_dropdown, oil_dropdown, cheese_dropdown,
+                        custom_ingredients,
+                        
+                        # Galleries
+                        selected_ingredients_gallery, recipe_gallery,
+                        
+                        # Recipe Summary Section
+                        recipe_title_display, recipe_likes_display, 
+                        missing_count_display, missing_ingredients_list, 
+                        unused_count_display, unused_ingredients_list,
+                        selected_recipe_id, selected_recipe_name,
+                        
+                        # Recipe Detail Section
+                        detail_title, detail_source, detail_score, detail_price, 
+                        detail_dishtypes, detail_summary, 
+                        detail_extended_ingredients, detail_recipe_image, detail_instructions, 
+                        detail_wine, detail_cuisines, 
+                        detail_taste, detail_diets, detail_nutrition
+                    ]
+                )                                     
 
                 translate_to_spoonacular_btn.click(
                     fn=translate_ingredient_names_to_spoonacular,
                     outputs=[selected_ingredients_gallery, llm_results_dataframe]
                 )
-
-                selected_ingredients_gallery.select(fn=remove_ingredient_from_gallery, 
-                                       outputs=[selected_ingredients_gallery]) 
 
                 clear_all_ingredients_btn.click(
                     fn=clear_all_ingredients,
@@ -1390,53 +1572,9 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     outputs=[selected_ingredients_gallery]
                 )                                
 
-            def toggle_selected_ingredient(data: gr.SelectData):
-                global __current_ingredients, __current_ingredient_gallery_items, __ingredient_gallery_items
-                
-                # Get the specific item clicked from the master pantry
-                clicked_item = __ingredient_gallery_items[data.index] 
-
-                # If this is the only item in the list, remove it
-                if len(__current_ingredient_gallery_items) == 1 and __current_ingredient_gallery_items[0] == __DEFAULT_LOADING_INGREDIENTS:
-                    __current_ingredient_gallery_items = [] 
-                    __current_ingredients = []
-                
-                # Toggle Logic: If it's there, remove it. If not, add it.
-                ingredient_name = clicked_item[1]
-                if clicked_item in __current_ingredient_gallery_items:
-                    __current_ingredient_gallery_items.remove(clicked_item)
-                    __current_ingredients.remove(ingredient_name)
-                else:
-                    __current_ingredient_gallery_items.append(clicked_item)
-                    __current_ingredients.append(ingredient_name)
-
-                # Check if list is empty; if so add place holder
-                if not __current_ingredient_gallery_items:
-                    __current_ingredient_gallery_items = [__DEFAULT_LOADING_INGREDIENTS]
-                
-                # Return the updated list to the SECOND gallery
-                return __current_ingredient_gallery_items, __current_ingredient_gallery_items
+            selected_ingredients_gallery.select(fn=remove_ingredient_from_gallery, 
+                                       outputs=[selected_ingredients_gallery])             
             
-            def toggle_selected_recipe_ingredient(data: gr.SelectData):
-                global __current_ingredient_gallery_items, __ingredient_gallery_items
-                
-                # Get the specific item clicked from the master pantry
-                clicked_item = __current_ingredient_gallery_items[data.index] 
-
-                # If this is the only item in the list, remove it
-                if len(__current_ingredient_gallery_items) == 1:
-                    __current_ingredient_gallery_items = [__DEFAULT_LOADING_INGREDIENTS]
-                else:
-                    __current_ingredient_gallery_items.remove(clicked_item)
-
-                # Return the updated list to the SECOND gallery
-                return __current_ingredient_gallery_items, __current_ingredient_gallery_items
-            
-            ingredients_gallery.select(fn=toggle_selected_ingredient, 
-                                       outputs=[recipe_ingredients_gallery, selected_ingredients_gallery])   
-            
-            recipe_ingredients_gallery.select(fn=toggle_selected_recipe_ingredient, 
-                                       outputs=[recipe_ingredients_gallery, selected_ingredients_gallery])                         
 
             get_recipes_btn.click(
                 fn=get_recipes,
@@ -1500,6 +1638,9 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
             def on_recipe_select(data: gr.SelectData):
                 global __current_recipes
+
+                if not __current_recipes:
+                    return '', '', '', '', '', '', '', ''
 
                 # Get the selected recipe id
                 recipe_id = __recipes_id_map.get(data.index)
