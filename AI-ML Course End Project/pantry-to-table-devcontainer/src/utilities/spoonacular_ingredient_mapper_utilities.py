@@ -15,8 +15,19 @@
 
     To start up ollama client locally:
 
-    $ ollama serve
-    $ ollama pull qwen2.5:3b
+    To start up ollama client locally:
+
+        # For Image Classification
+        $ ollama serve
+        $ ollama pull qwen2.5:3b
+
+        # For Image Label Classification
+        $ ollama pull llama3    
+        $ ollama pull mistral-small:22b
+
+        ** Best Choice
+        ** Provides best instruction-following and extraction logic specifically for messy OCR data
+        $ ollama pull qwen2.5:14b    
 """
 
 import os
@@ -31,7 +42,7 @@ from langchain_core.output_parsers import JsonOutputParser
 # ─────────────────────────────────────────
 # Spoonacular LLM Wrapper API 
 # ─────────────────────────────────────────
-class spoonacular_ingredient_mapper_utilities:
+class SpoonacularIngredientMapperUtilities:
     """
         Predicted Ingredient to Spoonacular Ingredient Name Mapper
 

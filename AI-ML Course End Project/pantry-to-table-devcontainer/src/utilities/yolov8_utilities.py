@@ -12,7 +12,7 @@ from ultralytics import YOLO
 # ─────────────────────────────────────────
 # YoloV8 Model Wrapper API 
 # ─────────────────────────────────────────
-class yolov8_utilities:
+class YoloV8Utilities:
     """YoloV8 utility class for the Pantry App."""
     
     # ─────────────────────────────────────────

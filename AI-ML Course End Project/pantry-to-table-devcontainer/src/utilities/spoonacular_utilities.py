@@ -17,7 +17,7 @@ import re
 from .utilities import utilities as utils
 
 
-class spoonacular_utilities:
+class SpoonacularUtilities:
     """Centralized utility class for the Pantry App."""
 
     # ─────────────────────────────────────────
@@ -32,9 +32,12 @@ class spoonacular_utilities:
     __TOTAL_RECIPES     = 30
     __RESULTS_PER_CALL  = 100
 
+    __INGREDIENTS_SEARCH_URL = 'https://api.spoonacular.com/food/ingredients/search'
     __INGREDIENTS_IMAGE_URL  = 'https://img.spoonacular.com/ingredients_'
     __INGREDIENTS_IMAGE_DIR  = 'ingredients_images'
     __INGREDIENTS_IMAGE_SIZE = '100x100'
+
+
 
     __RECIPES_IMAGE_URL         = 'https://img.spoonacular.com/ingredients_'
     __RECIPES_DIR               = 'recipes'
@@ -42,6 +45,7 @@ class spoonacular_utilities:
     __RECIPES_SCALED_IMAGE_DIR  = 'recipes_scaled_images'
     __RECIPES_SCALED_IMAGE_SIZE = (100,100)
     __RECIPE_DEFAULT_IMAGE      = 'default_images/default_recipe.jpg'
+    
 
     # ─────────────────────────────────────────
     # Member variables
@@ -56,9 +60,53 @@ class spoonacular_utilities:
     # ─────────────────────────────────────────
 
     @staticmethod
+    def verify_ingredient(ingredient_name) -> str:
+        """
+            Checks if an ingredient exists in the Spoonacular database.
+            Returns simple True or False
+        """
+
+        su = SpoonacularUtilities  # alias
+
+        url = utils.build_url(
+                        su.__INGREDIENTS_SEARCH_URL,
+                        query  = ingredient_name,
+                        number = 5,
+                        apiKey = su.__API_KEY
+                    )
+        
+        try:
+            results = requests.get(url)
+
+            # Check if any results were returned
+            if not results: 
+                return None
+            
+            data = results.json()
+            ingredient_list = data.get('results', [])
+            names = [item['name'] for item in ingredient_list]
+            
+            # Return the "official" name from their DB (e.g., "Chicken Breasts")
+            # Have to account for Spoonacular being TOO SMART. Just want closest match.
+            # Logic: Look for an exact match first
+            for name in names:
+                if name.lower() == ingredient_name.lower():
+                    return name
+
+            # Fallback: Return the shortest name (usually the most "basic" form)
+            # This prevents getting "sliced chicken breast" if "chicken breast" is an option
+            return min(names, key=len)
+            
+        except Exception as e:
+            print(f"Error verifying ingredient: {e}")
+            return None        
+
+
+    @staticmethod
     def load_Spoonacular_ingredients() -> str:
         """Call Spoonacular Ingredients API using utility helper methods and return consolidated status."""
-        su = spoonacular_utilities  # ← alias
+
+        su = SpoonacularUtilities  # alias
         
         # Track the final status message
         api_status_msg = ''
@@ -114,7 +162,8 @@ class spoonacular_utilities:
         Download and save images associated with loaded ingredients
         This expects a list of tupled ingrediengs (item_image, item_name)
         """
-        su = spoonacular_utilities          # ← alias
+
+        su = SpoonacularUtilities          # alias
 
         status = []
 
@@ -160,7 +209,8 @@ class spoonacular_utilities:
         """
         Returns a SET of standardized names that are successfully available on disk.
         """
-        su = spoonacular_utilities
+
+        su = SpoonacularUtilities
         successful_downloads = set()
         os.makedirs(path, exist_ok=True)
         
@@ -191,7 +241,8 @@ class spoonacular_utilities:
     @staticmethod
     def load_Spoonacular_recipes(ingredients_list) -> str:
         """Call Spoonacular Recipes API using utility helper methods and return consolidated status."""
-        su = spoonacular_utilities  # ← alias
+        
+        su = SpoonacularUtilities  # alias
 
         os.makedirs(su.__RECIPES_DIR, exist_ok=True)
         
@@ -231,7 +282,7 @@ class spoonacular_utilities:
                 api_status_msg = api_status_msg + "\n".join(formatted_lines)
         else:
             # If a call fails, return the error message immediately
-            return message
+            return message 
 
         # Update the utility class state
         su.current_recipes = accumulated_recipes
@@ -252,7 +303,8 @@ class spoonacular_utilities:
     @staticmethod
     def download_recipe_images() -> str:
         """Download and save images associated with loaded ingredients"""
-        su = spoonacular_utilities          # ← alias
+        
+        su = SpoonacularUtilities          # alias
 
         status = []
 
@@ -312,7 +364,7 @@ class spoonacular_utilities:
     @staticmethod
     def load_recipe_details(recipe_id, recipe_name) -> str:
         """Call Spoonacular Recipes API using utility helper methods and return consolidated status."""
-        su = spoonacular_utilities  # ← alias
+        su = SpoonacularUtilities  # alias
         
         os.makedirs(su.__RECIPES_DIR, exist_ok=True)
 
