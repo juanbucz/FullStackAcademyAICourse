@@ -436,21 +436,22 @@ def classify_ingredient(image) -> Tuple[Optional[str], Optional[str]]:
 
 def add_classified_ingredient(ingredient_name, image_array):
     """ """
-    global __custom_ingredient_gallery_items
+    global __current_ingredient_gallery_items
+
     # Check if ingredient name exists before adding
     if any(item[1].lower() == ingredient_name.lower() for item in __custom_ingredient_gallery_items):
         # Return the gallery, the original image, the original name, and the original confidence
         # gr.update() - don't change anything in the associated output control
         return (
-            __custom_ingredient_gallery_items, 
+            __current_ingredient_gallery_items, 
             gr.update(), 
             gr.update(), 
             gr.update()
         )
     
     # Remove default list place holder __DEFAULT_LOADING_INGREDIENTS
-    if __DEFAULT_LOADING_INGREDIENTS in __custom_ingredient_gallery_items:
-        __custom_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)    
+    if __DEFAULT_LOADING_INGREDIENTS in __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)    
 
     # Save a jpeg of the image with all the images on disk
     image_path = f'{__INGREDIENTS_IMAGES_FOLDER}/classified_{ingredient_name}.jpg'
@@ -462,20 +463,20 @@ def add_classified_ingredient(ingredient_name, image_array):
     cv2.imwrite(image_path, bgr_image)
 
     # Add to the list (alphabetical order)
-    __custom_ingredient_gallery_items.append((image_path, ingredient_name))
+    __current_ingredient_gallery_items.append((image_path, ingredient_name))
 
     # Sort alphabetically
-    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])    
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1])    
 
-    return __custom_ingredient_gallery_items, None, '', ''
+    return __current_ingredient_gallery_items, None, '', ''
 
 def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
     """ """
-    global __custom_ingredient_gallery_items
+    global __current_ingredient_gallery_items
 
     # Remove default list place holder __DEFAULT_LOADING_INGREDIENTS
-    if __DEFAULT_LOADING_INGREDIENTS in __custom_ingredient_gallery_items:
-        __custom_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)
+    if __DEFAULT_LOADING_INGREDIENTS in __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)
 
     new_ingredients = []
 
@@ -494,15 +495,15 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices):
         new_ingredients.extend(spices)
 
     # Remove any pre-exiting items from the list
-    existing_names = {item[1] for item in __custom_ingredient_gallery_items}
+    existing_names = {item[1] for item in __current_ingredient_gallery_items}
     items_to_add = [name for name in new_ingredients if name not in existing_names]
 
-    __custom_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add]) 
+    __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add]) 
 
     # Sort alphabetically
-    __custom_ingredient_gallery_items.sort(key=lambda x: x[1])
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1])
 
-    return __custom_ingredient_gallery_items, None, None, [], None, []
+    return __current_ingredient_gallery_items, None, None, [], None, []
 
 # ────────────────────────────────────────────────────────────────────────────
 # Map ingredient names to Spoonacular vocabulary
@@ -726,6 +727,7 @@ button[aria-label="Clear"], button[aria-label="Upload"] {
     background: white !important;
 }
 
+
 /* 5. SELECTION FEEDBACK */
 /* Adds a subtle color so you know it was clicked without it growing large */
 #pantry_list .thumbnail-item.selected {
@@ -836,34 +838,34 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         with gr.Column(scale=2, min_width=300):
                             with gr.Group():
                                 gr.Markdown("### 📝 Load Ingredient image")
-                                input_image = gr.Image(
+                                input_image1 = gr.Image(
                                                         label="Upload or Take a Photo of an Ingredient",
                                                         sources=["upload", "webcam"], # Enables both entry methods
                                                         type="numpy"                  # Standard format for YOLO/OpenCV
                                                     )        
 
-                                classified_ingredient_name = gr.Textbox(
+                                classified_ingredient_name1 = gr.Textbox(
                                                                     label="Ingredient Name",
                                                                     placeholder="e.g., olive oil, mustard, heavy cream",
                                                                     interactive=False,
                                                                     lines=2
                                                                 )
-                                confidence_level = gr.Textbox(
+                                confidence_level1 = gr.Textbox(
                                                             label="Classification Confidence Level",
                                                             placeholder="0.0",
                                                             interactive=False,
                                                             lines=2
                                                         )
                                 
-                                use_ocr_scanning_cb = gr.Checkbox(
+                                use_ocr_scanning_cb1 = gr.Checkbox(
                                         label="Enable OCR Image Scanning", 
                                         value=__use_ocr_image_scanning,
                                         info='Check this to add ingredient labels scanning.'
                                     )
 
-                                classify_ingredients_btn = gr.Button("Classify Ingredient", variant="primary")
-                                clear_classified_ingredient_name_btn = gr.Button("Clear Classified Ingredient")    
-                                add_classified_btn = gr.Button("Add Classified Ingredient", variant="primary")
+                                classify_ingredients_btn1 = gr.Button("Classify Ingredient", variant="primary")
+                                clear_classified_ingredient_name_btn1 = gr.Button("Clear Classified Ingredient")    
+                                add_classified_btn1 = gr.Button("Add Classified Ingredient", variant="primary")
 
 
                         # The Additional Ingredients
@@ -924,7 +926,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                         with gr.Column(scale=3, min_width=400):
                             with gr.Group():
                                 gr.Markdown("### 📝 Desired Ingredients")
-                                custom_ingredient_recipe_gallery = gr.Gallery(
+                                custom_ingredient_recipe_gallery1 = gr.Gallery(
                                     value=__custom_ingredient_gallery_items, 
                                     elem_id="pantry_list", 
                                     columns=1, 
@@ -943,67 +945,67 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                     datatype=["str", "str"]
                                 )
 
-                use_ocr_scanning_cb.change(
-                    fn=update_ocr_scanning_flag, 
-                    inputs=[use_ocr_scanning_cb])                  
+                # use_ocr_scanning_cb.change(
+                #     fn=update_ocr_scanning_flag, 
+                #     inputs=[use_ocr_scanning_cb])                  
 
-                classify_ingredients_btn.click(
-                    fn=classify_ingredient,
-                    inputs=[input_image],
-                    outputs=[classified_ingredient_name, confidence_level]
-                )
+                # classify_ingredients_btn.click(
+                #     fn=classify_ingredient,
+                #     inputs=[input_image],
+                #     outputs=[classified_ingredient_name, confidence_level]
+                # )
 
-                clear_classified_ingredient_name_btn.click(
-                    fn=lambda: (None, '', ''),
-                    outputs=[input_image, classified_ingredient_name, confidence_level]
-                )                                                                   
+                # clear_classified_ingredient_name_btn.click(
+                #     fn=lambda: (None, '', ''),
+                #     outputs=[input_image, classified_ingredient_name, confidence_level]
+                # )                                                                   
 
-                add_classified_btn.click(
-                    fn=add_classified_ingredient,
-                    inputs=[classified_ingredient_name, input_image],
-                    outputs=[custom_ingredient_recipe_gallery, input_image, classified_ingredient_name, confidence_level]
-                )                                                              
+                # add_classified_btn.click(
+                #     fn=add_classified_ingredient,
+                #     inputs=[classified_ingredient_name, input_image],
+                #     outputs=[custom_ingredient_recipe_gallery, input_image, classified_ingredient_name, confidence_level]
+                # )                                                              
 
-                add_standard_ingredients_btn.click(
-                    fn=add_standard_ingredients,
-                    inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
-                    outputs=[custom_ingredient_recipe_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
-                )
+                # add_standard_ingredients_btn.click(
+                #     fn=add_standard_ingredients,
+                #     inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
+                #     outputs=[custom_ingredient_recipe_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                # )
 
-                clear_standard_ingredients_btn.click(
-                    fn=lambda: (gr.update(value=None), 
-                                gr.update(value=None),
-                                gr.update(value=[]),
-                                gr.update(value=None),
-                                gr.update(value=[])),
-                    outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
-                )                                 
+                # clear_standard_ingredients_btn.click(
+                #     fn=lambda: (gr.update(value=None), 
+                #                 gr.update(value=None),
+                #                 gr.update(value=[]),
+                #                 gr.update(value=None),
+                #                 gr.update(value=[])),
+                #     outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                # )                                 
               
-                add_custom_ingredients_btn.click(
-                    fn=add_custom_ingredients,
-                    inputs=[custom_ingredients],
-                    outputs=[custom_ingredient_recipe_gallery, custom_ingredients]                    
-                )
+                # add_custom_ingredients_btn.click(
+                #     fn=add_custom_ingredients,
+                #     inputs=[custom_ingredients],
+                #     outputs=[custom_ingredient_recipe_gallery, custom_ingredients]                    
+                # )
 
-                clear_custom_ingredients_btn.click(
-                    fn=lambda: (''),
-                    outputs=[custom_ingredients]
-                )                                        
+                # clear_custom_ingredients_btn.click(
+                #     fn=lambda: (''),
+                #     outputs=[custom_ingredients]
+                # )                                        
 
-                translate_to_spoonacular_btn.click(
-                    fn=translate_ingredient_names_to_spoonacular,
-                    outputs=[custom_ingredient_recipe_gallery, llm_results_dataframe]
-                )
+                # translate_to_spoonacular_btn.click(
+                #     fn=translate_ingredient_names_to_spoonacular,
+                #     outputs=[custom_ingredient_recipe_gallery, llm_results_dataframe]
+                # )
 
-                custom_ingredient_recipe_gallery.select(fn=remove_ingredient_from_gallery, 
-                                       outputs=[custom_ingredient_recipe_gallery]) 
+                # custom_ingredient_recipe_gallery.select(fn=remove_ingredient_from_gallery, 
+                #                        outputs=[custom_ingredient_recipe_gallery]) 
 
-                clear_all_ingredients_btn.click(
-                    fn=clear_all_ingredients,
-                    outputs=[input_image, classified_ingredient_name, confidence_level, meat_dropdown,
-                             fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, 
-                             custom_ingredients, custom_ingredient_recipe_gallery, llm_results_dataframe]
-                )                     
+                # clear_all_ingredients_btn.click(
+                #     fn=clear_all_ingredients,
+                #     outputs=[input_image, classified_ingredient_name, confidence_level, meat_dropdown,
+                #              fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, 
+                #              custom_ingredients, custom_ingredient_recipe_gallery, llm_results_dataframe]
+                # )                     
 
 
         # ------------------------------------------------------------------
@@ -1083,39 +1085,167 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                 with gr.Column(scale=2):
 
                     with gr.Row():
-                        get_recipes_btn = gr.Button("Load Spoonacular Recipes", variant="primary")
-                        download_recipe_images_btn = gr.Button("Download Recipe Images", variant="primary")
+                        get_recipes_btn = gr.Button("Load Spoonacular Recipes", variant="primary", visible=False)
+                        download_recipe_images_btn = gr.Button("Download Recipe Images", variant="primary", visible=False)
                         with gr.Column(min_width=150):
-                            load_recipe_button = gr.Button("Load Selected Recipe", variant="primary")
-                            clear_recipes_btn = gr.Button("Clear All Recipe Data", variant="stop")
+                            load_recipe_button = gr.Button("Load Selected Recipe", variant="primary", visible=False)
+                            clear_recipes_btn = gr.Button("Clear All Recipe Data", variant="stop", visible=False)
 
-                    gr.Markdown("### 📝 Available Recipe Selection")
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            with gr.Group():
+
+                                gr.Markdown("### 📝 Load Ingredient image")
+
+                                input_image = gr.Image(
+                                                        label="Upload or Take a Photo of an Ingredient",
+                                                        sources=["upload", "webcam"], # Enables both entry methods
+                                                        type="numpy"                  # Standard format for YOLO/OpenCV
+                                                    )        
+                                
+                                with gr.Row():
+                                
+                                    classified_ingredient_name = gr.Textbox(
+                                                                        label="Ingredient Name",
+                                                                        placeholder="e.g., olive oil, mustard, heavy cream",
+                                                                        interactive=False,
+                                                                        lines=2,
+                                                                        scale=7
+                                                                    )
+                                    confidence_level = gr.Textbox(
+                                                                label="Confidence",
+                                                                placeholder="0.0",
+                                                                interactive=False,
+                                                                lines=2,
+                                                                scale=1,
+                                                                min_width=80
+                                                            )
+                                
+                                use_ocr_scanning_cb = gr.Checkbox(
+                                        label="Enable OCR Image Scanning", 
+                                        value=__use_ocr_image_scanning,
+                                        info='Check this to add ingredient labels scanning.'
+                                    )
+
+                                classify_ingredients_btn = gr.Button("Classify Ingredient", variant="primary")
+                                add_classified_btn = gr.Button("Add Classified Ingredient", variant="huggingface")                            
+
+                        with gr.Column(scale=2):                            
+
+                            gr.Markdown("### 📝 Select Additional Ingredients")
+
+                            with gr.Row():
+
+                                meat_dropdown = gr.Dropdown(choices=MEAT_LIST, 
+                                                            value=None,
+                                                            label='Meat',
+                                                            container=True,
+                                                            interactive=True)
+                                fish_dropdown = gr.Dropdown(choices=SEAFOOD_LIST,
+                                                            value=None,
+                                                            label='Fish',
+                                                            container=True,
+                                                            interactive=True)                            
+
+                            with gr.Row():
+
+                                shellfish_dropdown = gr.Dropdown(choices=SHELLFISH_LIST,
+                                                                value=None,
+                                                                multiselect=True,
+                                                                label='Shellfish',
+                                                                container=True,
+                                                                interactive=True)                                                        
+
+                                pasta_dropdown = gr.Dropdown(choices=PASTA_LIST,
+                                                            value=None,
+                                                            label='Pasta',
+                                                            container=True,
+                                                            interactive=True)                                                        
+
+                            with gr.Row():
+                                                                
+                                spice_dropdown = gr.Dropdown(choices=SPICE_LIST,
+                                                            value=None,
+                                                            multiselect=True,
+                                                            label='Spices',
+                                                            container=True,
+                                                            interactive=True) 
+                                
+                                oil_dropdown = gr.Dropdown(choices=OIL_LIST,
+                                                            value=None,
+                                                            multiselect=True,
+                                                            label='Oils',
+                                                            container=True,
+                                                            interactive=True)                                  
+                                
+                                cheese_dropdown = gr.Dropdown(choices=CHEESE_LIST,
+                                                              value=None,
+                                                              multiselect=True,
+                                                              label='Cheeses',
+                                                              container=True,
+                                                              interactive=True)  
+                                
+                            add_standard_ingredients_btn = gr.Button("Add Standard Ingredients", variant="huggingface")
+
+                            custom_ingredients = gr.Textbox(
+                                                        label="Custom Ingredients (comma separated)",
+                                                        placeholder="e.g., olive oil, mustard, heavy cream",
+                                                        lines=2,
+                                                        interactive=True
+                                                    )
+
+                            add_custom_ingredients_btn = gr.Button("Add Custom Ingredients", variant='huggingface')
+                            clear_custom_ingredients_btn = gr.Button("Restart Recipe", variant='stop')    
+
 
                     selected_indices = gr.State([])
 
-                    with gr.Row():
+                    # with gr.Row():
                             
-                            with gr.Column(scale=2, min_width=300):
-                                # The Selected Ingredients Gallery (Items ready for the recipe)
-                                gr.Markdown("### 🛒 Selected Ingredients")
-                                selected_ingredients_gallery = gr.Gallery(
-                                    value=__current_ingredient_gallery_items, 
-                                    elem_id="pantry_list", 
-                                    columns=1, 
-                                    height=600, 
-                                    interactive=True
-                                )
+                    #         with gr.Column(scale=2, min_width=300):
+                    #             # The Selected Ingredients Gallery (Items ready for the recipe)
+                    #             selected_ingredients_gallery = gr.Gallery(
+                    #                 value=__current_ingredient_gallery_items, 
+                    #                 elem_id='pantry_ingredient_list', 
+                    #                 label='Selected Ingredients',
+                    #                 columns=3, 
+                    #                 height=300, 
+                    #                 interactive=True
+                    #             )
 
-                            # The Available Recipes Gallery 
-                            with gr.Column(scale=3, min_width=400):
-                                gr.Markdown("### 📝 Available Recipes")
-                                recipe_gallery = gr.Gallery(
-                                    value=__recipe_gallery_items, 
-                                    elem_id="pantry_list", 
-                                    columns=1, 
-                                    height=600, 
-                                    interactive=True
-                                )
+                    #         # The Available Recipes Gallery 
+                    #         with gr.Column(scale=3, min_width=400):
+                    #             recipe_gallery = gr.Gallery(
+                    #                 value=__recipe_gallery_items, 
+                    #                 elem_id='pantry_recipe_list', 
+                    #                 label='Available Recipes',
+                    #                 columns=3, 
+                    #                 height=300, 
+                    #                 interactive=True
+                    #             )
+
+                    with gr.Row():
+                        # Force the Ingredients list to be much narrower
+                        with gr.Column(scale=1, min_width=200): # Dropped scale from 2 to 1
+                            selected_ingredients_gallery = gr.Gallery(
+                                value=__current_ingredient_gallery_items, 
+                                elem_id='pantry_ingredient_list', 
+                                label='Selected Ingredients',
+                                columns=1, # Change back to 1 for a clean vertical list
+                                height=300, 
+                                object_fit="contain" # CRITICAL: stops the image from stretching
+                            )
+
+                        # Give the Recipes the lion's share of the 50% left-side block
+                        with gr.Column(scale=2, min_width=300): # Kept at 2 or 3
+                            recipe_gallery = gr.Gallery(
+                                value=__recipe_gallery_items, 
+                                elem_id='pantry_recipe_list',                                 
+                                label='Available Recipes',
+                                columns=2, # 2 columns here looks better in a split view
+                                height=300, 
+                                object_fit="contain"
+                            )                    
                     
                     gr.Markdown("### 🔍 Selected Recipe Details")
                     with gr.Group(): # Group these related fields together visually
@@ -1142,7 +1272,10 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                     interactive=False
                                 )
 
-                    recipe_load_status = gr.Textbox(label="Recipes Status", lines=4, interactive=False)
+                    recipe_load_status = gr.Textbox(label="Recipes Status", 
+                                                    lines=4, 
+                                                    interactive=False, 
+                                                    visible=False)
 
                                     
                 with gr.Column(scale=2): # This should be the right-side column
@@ -1192,6 +1325,65 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 detail_diets = gr.Textbox(label="Diets", interactive=False)
                             with gr.Column(scale=2, min_width=350):    
                                 detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
+                                
+
+
+                use_ocr_scanning_cb.change(
+                    fn=update_ocr_scanning_flag, 
+                    inputs=[use_ocr_scanning_cb])                  
+
+                classify_ingredients_btn.click(
+                    fn=classify_ingredient,
+                    inputs=[input_image],
+                    outputs=[classified_ingredient_name, confidence_level]
+                )
+
+                add_classified_btn.click(
+                    fn=add_classified_ingredient,
+                    inputs=[classified_ingredient_name, input_image],
+                    outputs=[selected_ingredients_gallery, input_image, classified_ingredient_name, confidence_level]
+                )                                                              
+
+                add_standard_ingredients_btn.click(
+                    fn=add_standard_ingredients,
+                    inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
+                    outputs=[selected_ingredients_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                )
+
+                clear_standard_ingredients_btn.click(
+                    fn=lambda: (gr.update(value=None), 
+                                gr.update(value=None),
+                                gr.update(value=[]),
+                                gr.update(value=None),
+                                gr.update(value=[])),
+                    outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
+                )                                 
+              
+                add_custom_ingredients_btn.click(
+                    fn=add_custom_ingredients,
+                    inputs=[custom_ingredients],
+                    outputs=[selected_ingredients_gallery, custom_ingredients]                    
+                )
+
+                clear_custom_ingredients_btn.click(
+                    fn=lambda: (''),
+                    outputs=[custom_ingredients]
+                )                                        
+
+                translate_to_spoonacular_btn.click(
+                    fn=translate_ingredient_names_to_spoonacular,
+                    outputs=[selected_ingredients_gallery, llm_results_dataframe]
+                )
+
+                selected_ingredients_gallery.select(fn=remove_ingredient_from_gallery, 
+                                       outputs=[selected_ingredients_gallery]) 
+
+                clear_all_ingredients_btn.click(
+                    fn=clear_all_ingredients,
+                    outputs=[input_image, classified_ingredient_name, confidence_level, meat_dropdown,
+                             fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, 
+                             custom_ingredients, selected_ingredients_gallery, llm_results_dataframe]
+                )                     
 
             spoonacular_ingredients_to_recipe_btn.click(
                     fn=load_ingredients_into_recipe_management,
