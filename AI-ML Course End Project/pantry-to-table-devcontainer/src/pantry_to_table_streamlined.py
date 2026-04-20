@@ -992,7 +992,7 @@ button[aria-label="Clear"], button[aria-label="Upload"] {
 }
 """
 
-with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pantry_css) as pantry_to_table:
+with gr.Blocks(title="KitchClick a Pantry to Table Recipe Selection System", css=combined_pantry_css) as pantry_to_table:
 
     with gr.Tabs():
 
@@ -1000,7 +1000,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
         # ------------------------------------------------------------------
         # Tab 1: Ingredients Upload, Classification and  Management
         # ------------------------------------------------------------------
-        with gr.Tab("1. General Instructions"):
+        with gr.Tab("1. General Instructions", visible=False):
             gr.Markdown("""
                 # This system uses allows users to gather a list of ingredients and generate recipe possibilities
                 
@@ -1048,7 +1048,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
         # ------------------------------------------------------------------
         # Tab 1: Ingredients Upload, Classification and  Management
         # ------------------------------------------------------------------
-        with gr.Tab("1. Manage Custom User Ingredients"):
+        with gr.Tab("1. Manage Custom User Ingredients", visible=False):
             gr.Markdown("""
                         # Upload, Classify and Manage Ingredients
                         """)
@@ -1171,73 +1171,10 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                     datatype=["str", "str"]
                                 )
 
-                # use_ocr_scanning_cb.change(
-                #     fn=update_ocr_scanning_flag, 
-                #     inputs=[use_ocr_scanning_cb])                  
-
-                # classify_ingredients_btn.click(
-                #     fn=classify_ingredient,
-                #     inputs=[input_image],
-                #     outputs=[classified_ingredient_name, confidence_level]
-                # )
-
-                # clear_classified_ingredient_name_btn.click(
-                #     fn=lambda: (None, '', ''),
-                #     outputs=[input_image, classified_ingredient_name, confidence_level]
-                # )                                                                   
-
-                # add_classified_btn.click(
-                #     fn=add_classified_ingredient,
-                #     inputs=[classified_ingredient_name, input_image],
-                #     outputs=[custom_ingredient_recipe_gallery, input_image, classified_ingredient_name, confidence_level]
-                # )                                                              
-
-                # add_standard_ingredients_btn.click(
-                #     fn=add_standard_ingredients,
-                #     inputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown],
-                #     outputs=[custom_ingredient_recipe_gallery, meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
-                # )
-
-                # clear_standard_ingredients_btn.click(
-                #     fn=lambda: (gr.update(value=None), 
-                #                 gr.update(value=None),
-                #                 gr.update(value=[]),
-                #                 gr.update(value=None),
-                #                 gr.update(value=[])),
-                #     outputs=[meat_dropdown, fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown]
-                # )                                 
-              
-                # add_custom_ingredients_btn.click(
-                #     fn=add_custom_ingredients,
-                #     inputs=[custom_ingredients],
-                #     outputs=[custom_ingredient_recipe_gallery, custom_ingredients]                    
-                # )
-
-                # restart_recipes_btn.click(
-                #     fn=lambda: (''),
-                #     outputs=[custom_ingredients]
-                # )                                        
-
-                # translate_to_spoonacular_btn.click(
-                #     fn=translate_ingredient_names_to_spoonacular,
-                #     outputs=[custom_ingredient_recipe_gallery, llm_results_dataframe]
-                # )
-
-                # custom_ingredient_recipe_gallery.select(fn=remove_ingredient_from_gallery, 
-                #                        outputs=[custom_ingredient_recipe_gallery]) 
-
-                # clear_all_ingredients_btn.click(
-                #     fn=clear_all_ingredients,
-                #     outputs=[input_image, classified_ingredient_name, confidence_level, meat_dropdown,
-                #              fish_dropdown, shellfish_dropdown, pasta_dropdown, spice_dropdown, 
-                #              custom_ingredients, custom_ingredient_recipe_gallery, llm_results_dataframe]
-                # )                     
-
-
         # ------------------------------------------------------------------
         # Tab 3: Spoonacular Ingredient Management
         # ------------------------------------------------------------------
-        with gr.Tab("2. Manage Spoonacular Ingredients"):
+        with gr.Tab("2. Manage Spoonacular Ingredients", visible=False):
             gr.Markdown("""
                         # Loads requested number of ingredients, and their related images via Spoonacular API
                         """)
@@ -1297,7 +1234,7 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
         # ------------------------------------------------------------------
         # Tab 4: Recipe Management
         # ------------------------------------------------------------------
-        with gr.Tab("3. Manage Recipes"):
+        with gr.Tab("Pantry To Table Recipe Selection", visible=True):
             gr.Markdown("""
             # Loads top ranked recipes and their images based on selected ingredients via Spoonacular API
             """)
@@ -1558,7 +1495,8 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                                 detail_diets = gr.Textbox(label="Diets", interactive=False)
                             with gr.Column(scale=2, min_width=350):    
                                 detail_nutrition = gr.Textbox(label="Nutrition Summary", lines=5, interactive=False)
-                                
+               
+                                 
 
                 use_ocr_scanning_cb.change(
                     fn=update_ocr_scanning_flag, 
@@ -1760,7 +1698,9 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
                     selected_recipe_id,
                     selected_recipe_name
                 ]
-            )            
+            )    
+
+        gr.Markdown("##### © 2026 KitchClick")        
 
 
 
