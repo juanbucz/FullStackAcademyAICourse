@@ -75,7 +75,9 @@ class SpoonacularIngredientMapperUtilities:
         # --- Initialize backends ---
         # ─────────────────────────────────────────
 
-        self.ollama_model = 'qwen2.5:3b'
+        # self.ollama_model = 'qwen2.5:3b'
+        self.ollama_model = 'qwen2.5:7b'
+
         self.ollama_client = ChatOllama(model=self.ollama_model, 
                                         temperature=self.temperature)
 
@@ -110,29 +112,62 @@ class SpoonacularIngredientMapperUtilities:
 
             Rules:
             1. **Output Format**: Return ONLY a valid JSON object.
-            2. **Key Preservation**: The Key must be EXACTLY the same string as provided in the input list. Do not add underscores, change case, or modify punctuation in the Key.
-            3. **Value Standardization (Culinary Specificity)**: 
-                - Keep essential culinary forms and cuts (e.g., 'chicken thigh', 'garlic powder', 'tomato paste', 'sirloin tips').
-                - Strip marketing adjectives and regional varieties (e.g., 'Organic Fuji Apple' -> 'apple', 'Idaho potato' -> 'potato').
-                - Do NOT over-generalize specific ingredients into broad categories (e.g., do NOT map 'linguine' to 'pasta' or 'basil' to 'herb').
+            2. **Key Preservation**: The Key must be EXACTLY the same string as provided in the input list. Do not modify punctuation, casing, or spacing of the Key.
+            3. **Standardization (Spoonacular Style)**: 
+                - Map food items to their most common, simple culinary name.
+                - Use kebab-case for values (e.g., 'monterey-jack-cheese', 'fresh-ground-beef').
+                - Strip marketing adjectives (e.g., 'Organic Fuji Apple' -> 'apple').
+                - Keep specific forms/cuts (e.g., 'chicken-thigh' vs 'chicken-breast', 'tomato-paste' vs 'tomato-sauce').
 
-            4. **Filter Unknowns**: Map clearly non-food items to the string "unknown".
+            4. **Filter Unknowns**: 
+                - Map clearly non-food items (e.g., 'tire', 'cardboard box') to "unknown".
+                - **CRITICAL**: If an item is edible (like 'Bacon' or 'Monterey Jack'), NEVER map it to "unknown".
+
+            5. **Uniqueness Constraint**: 
+                - Each standardized Value in the result must be UNIQUE. 
+                - If multiple input Keys map to the same ingredient (e.g., 'Fuji Apple' and 'Red Apple'), map the first occurrence to the name and all subsequent similar items to the string "duplicate".
 
             ### FEW-SHOT EXAMPLES:
-            Input: ["Garlic Powder", "Fresh Basil", "Linguine pasta"]
-            Output: {{"Garlic Powder": "garlic-powder", "Fresh Basil": "basil", "Linguine pasta": "linguine"}}
+            Input: ["Garlic Powder", "Fresh Basil", "Linguine pasta", "Fuji Apple", "Granny Smith Apple", "Red Apple"]
+            Output: {{
+                "Garlic Powder": "garlic-powder", 
+                "Fresh Basil": "basil", 
+                "Linguine pasta": "linguine", 
+                "Fuji Apple": "apple", 
+                "Granny Smith Apple": "duplicate", 
+                "Red Apple": "duplicate"
+            }}
 
-            Input: ["Chicken Thighs", "Boneless Chicken Breast", "Kitchen Scale"]
-            Output: {{"Chicken Thighs": "chicken-thigh", "Boneless Chicken Breast": "chicken-breast", "Kitchen Scale": "unknown"}}
+            Input: ["Bacon", "Angel Hair", "Monterey Jack", "Chicken Thighs", "Boneless Chicken Breast", "Kitchen Scale"]
+            Output: {{
+                "Bacon": "bacon", 
+                "Angel Hair": "angel-hair-pasta", 
+                "Monterey Jack": "monterey-jack-cheese", 
+                "Chicken Thighs": "chicken-thigh", 
+                "Boneless Chicken Breast": "chicken-breast", 
+                "Kitchen Scale": "unknown"
+            }}
 
-            Input: ["Russet Potatoes", "Granny Smith Apples", "Tomato Paste"]
-            Output: {{"Russet Potatoes": "potato", "Granny Smith Apples": "apple", "Tomato Sauce": "tomato-sauce-or-pasta-sauce"}}
+            Input: ["Russet Potatoes", "Granny Smith Apples", "Tomato Sauce"]
+            Output: {{
+                "Russet Potatoes": "potato", 
+                "Granny Smith Apples": "apple", 
+                "Tomato Sauce": "tomato-sauce-or-pasta-sauce"
+            }}
 
             Input: ["Red Bell Pepper", "Sharp Cheddar Cheese", "Cardboard Box"]
-            Output: {{"Red Bell Pepper": "bell-pepper", "Sharp Cheddar Cheese": "cheddar-cheese", "Cardboard Box": "unknown"}}
+            Output: {{
+                "Red Bell Pepper": "bell-pepper", 
+                "Sharp Cheddar Cheese": "cheddar-cheese", 
+                "Cardboard Box": "unknown"
+            }}
 
             Input: ["Iceberg Lettuce", "Ground Beef", "Beets"]
-            Output: {{"Iceberg Lettuce": "iceberg-lettuce", "Ground Beef": "fresh-ground-beef", "Beets": "beet"}}
+            Output: {{
+                "Iceberg Lettuce": "iceberg-lettuce", 
+                "Ground Beef": "fresh-ground-beef", 
+                "Beets": "beet"
+            }}
             """
 
 
@@ -155,8 +190,14 @@ class SpoonacularIngredientMapperUtilities:
         # Prepare input string (The parser handles the list effectively)
         try:
             # Returns: {"Ham": "ham", "tire": "unknown", "Idaho potato": "potato", ...}
-            spoonaculared_dict = chain.invoke({"detected_items": detected_items})
-            
+            raw_dict = chain.invoke({"detected_items": detected_items})
+
+            # Filter out duplicates and unknowns
+            spoonaculared_dict = {
+                k: v for k, v in raw_dict.items() 
+                if v.lower() not in ["duplicate"]
+            }            
+                
             # Preserve ingredient name Case
             return spoonaculared_dict
             

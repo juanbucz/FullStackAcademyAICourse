@@ -322,7 +322,7 @@ class SpoonacularUtilities:
 
             # Use regex to remove ANY non-alphanumeric characters except dots or dashes
             # This kills slashes (/), colons (:), and backslashes (\)
-            img_name = re.sub(r'[^\w\.-]', '', img_name)            
+            img_name = re.sub(r'[^a-zA-Z0-9\-_]', '', img_name)          
 
             img_url = item['image']  # e.g., 'apple.jpg'
             #img_url = f'{su.__RECIPES_IMAGE_URL}{su.__RECIPES_SCALED_IMAGE_SIZE}/{img_name}'
@@ -400,7 +400,7 @@ class SpoonacularUtilities:
             
         # Use regex to remove ANY non-alphanumeric characters except dots or dashes
         # This kills slashes (/), colons (:), and backslashes (\)
-        clean_recipe_name = re.sub(r'[^\w\.-]', '', clean_recipe_name) 
+        clean_recipe_name = re.sub(r'[^a-zA-Z0-9\-_]', '', clean_recipe_name) 
 
         save_path = os.path.join(su.__RECIPES_DIR, f'{clean_recipe_name}_details.json')
         with open(save_path, 'w') as f:

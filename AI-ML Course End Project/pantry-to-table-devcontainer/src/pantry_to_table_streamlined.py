@@ -255,7 +255,14 @@ def get_recipes() -> str:
     __current_recipes = su.current_recipes
 
     # For 'List Box'
-    __recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
+    #__recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
+    __recipe_gallery_items = [
+        (
+            f"{__RECIPES_SCALED_IMAGE_DIR}/{re.sub(r'[^a-zA-Z0-9\-_]', '', item['title'])}.jpg", 
+            item['title']
+        ) 
+        for item in __current_recipes
+    ]    
 
     # For retrieving ingredient ID
     __recipes_id_map = {index: item['id'] for index, item in enumerate(__current_recipes)}       
@@ -372,7 +379,8 @@ def load_recipe_details(recipe_id, recipe_name) -> tuple[str, any]:
     
     if recipe_id is None or recipe_name is None:
               return (
-                    None, None,  None, None, None, None, None, None, None, None, None, None, None, None
+                    None, None,  None, None, None, None, None, 
+                    None, None, None, None, None, None, None
                 )
     
     results = su.load_recipe_details(recipe_id, recipe_name)
@@ -507,12 +515,8 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices, oils, cheeses
     if isinstance(cheeses, list) and cheeses:
         new_ingredients.extend(cheeses)
 
-
-    # Remove any pre-exiting items from the list
-    existing_names = {item[1] for item in __current_ingredient_gallery_items}
-    items_to_add = [name for name in new_ingredients if name not in existing_names]
-
-    __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add]) 
+    # Translate to Spoonacular Venacular
+    translate_to_spoonacular(new_ingredients)
 
     # Sort alphabetically
     __current_ingredient_gallery_items.sort(key=lambda x: x[1].lower())
@@ -522,6 +526,89 @@ def add_standard_ingredients(meat, fish, shellfish, pasta, spices, oils, cheeses
 # ────────────────────────────────────────────────────────────────────────────
 # Map ingredient names to Spoonacular vocabulary
 # ────────────────────────────────────────────────────────────────────────────
+def translate_to_spoonacular(ingredient_names):
+    """ """
+    global __current_ingredient_gallery_items
+
+    if __DEFAULT_LOADING_INGREDIENTS in __current_ingredient_gallery_items:
+        __current_ingredient_gallery_items.remove(__DEFAULT_LOADING_INGREDIENTS)    
+
+    __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in ingredient_names])  
+
+    # Pass names into mapper for name resolution
+    ingredient_dict = __spoon_mapper_utils.map_ingredients_to_spoonacular(ingredient_names)
+
+    # For more efficient resolution/lookups create dictionary based on gallery_items
+    # Format: { "label": "current_path" }
+    gallery_lookup = {label: path for path, label in __current_ingredient_gallery_items}
+    
+    # By examining the current gallery, figure out which ingredients need downloaded images.
+    # If it has "default image_path" it needs to have image downloaded
+    download_queue = []
+    for original_label, mapped_label in ingredient_dict.items():
+
+        # If this was a recognized ingredients
+        if mapped_label != "unknown":
+            current_path = gallery_lookup.get(original_label)
+
+            if current_path == __DEFAULT_IMAGE_PATH:
+                download_queue.append(mapped_label)
+
+    # Download images for unique ingredient names
+    successful_names = set()
+    if download_queue:
+        unique_requests = list(set(download_queue))
+        successful_names = su.download_ingredient_images(unique_requests)
+
+    existing_labels = {label for path, label in __current_ingredient_gallery_items}
+
+    updated_gallery = []
+    for original_label, mapped_label in ingredient_dict.items():
+
+        # # Guard Clause: Skip if we already have this item
+        # if original_label in existing_labels:
+        #     continue
+        
+        if original_label in gallery_lookup:
+            current_path = gallery_lookup[original_label]
+            
+            # A: Item is not food
+            if mapped_label == "unknown":
+                new_path = __UNKNOWN_INGREDIENT_PATH
+            
+            # B: Item is food AND currently a placeholder
+            elif current_path == __DEFAULT_IMAGE_PATH:
+                # Check if the download actually landed on disk
+                if mapped_label in successful_names:
+                    new_path = f"{__INGREDIENTS_IMAGES_FOLDER}/{mapped_label}.jpg"
+                else:
+                    # Fallback to default if API returned 404/Error
+                    new_path = __DEFAULT_IMAGE_PATH
+            
+            # C: Item already has a custom/scanned image
+            else:
+                new_path = current_path
+            
+            updated_gallery.append((new_path, original_label))
+
+
+    # Update the images
+    index_lookup = {label: i for i, (path, label) in enumerate(__current_ingredient_gallery_items)}
+
+    for new_path, label in updated_gallery:
+        if label in index_lookup:
+            # UPDATE: Replace the tuple at the specific index
+            idx = index_lookup[label]
+            __current_ingredient_gallery_items[idx] = (new_path, label)
+        else:
+            # INSERT: Brand new item, just append it
+            __current_ingredient_gallery_items.append((new_path, label))
+
+    # Sort alphabetically
+    __current_ingredient_gallery_items.sort(key=lambda x: x[1].lower())
+
+    return __current_ingredient_gallery_items
+
     
 def translate_ingredient_names_to_spoonacular():
     """ """
@@ -646,11 +733,8 @@ def add_custom_ingredients(custom_ingredients):
     # Use list comprehension to split, strip, and ignore empty results
     new_ingredients = [item.strip() for item in custom_ingredients.split(",") if item.strip()]   
 
-    # Remove any pre-exiting items from the list
-    existing_names = {item[1] for item in __custom_ingredient_gallery_items}
-    items_to_add = [name for name in new_ingredients if name not in existing_names]
-
-    __current_ingredient_gallery_items.extend([(__DEFAULT_IMAGE_PATH, item) for item in items_to_add])      
+    # Translate to Spoonacular Venacular
+    translate_to_spoonacular(new_ingredients)
                     
     return  __current_ingredient_gallery_items, ''
 
@@ -669,9 +753,15 @@ def load_recipes():
     # Load ingredients for display/selection
     __current_recipes = su.current_recipes
 
-    # For 'List Box'
-    __recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
-
+    # For 'List Box' img_name = re.sub(r'[^a-zA-Z0-9\-_]', '', img_name) 
+    #__recipe_gallery_items = [(f'{__RECIPES_SCALED_IMAGE_DIR}/{item['title'].replace(" ", "")}.jpg', item['title']) for item in __current_recipes] 
+    __recipe_gallery_items = [
+        (
+            f"{__RECIPES_SCALED_IMAGE_DIR}/{re.sub(r'[^a-zA-Z0-9\-_]', '', item['title'])}.jpg", 
+            item['title']
+        ) 
+        for item in __current_recipes
+]
     # For retrieving ingredient ID
     __recipes_id_map = {index: item['id'] for index, item in enumerate(__current_recipes)}       
 
@@ -745,87 +835,117 @@ custom_css = """
 # This string is passed to gr.Blocks(css=...)
 # The final combined CSS for your pantry app
 combined_pantry_css = """
-/* 1. HIDE GRADIO UI CONTROLS */
+/* 1. GLOBAL: HIDE GRADIO UI CONTROLS */
 .gallery-container .controls, .gallery-container .selected-controls,
 button[aria-label="Clear"], button[aria-label="Upload"] {
     display: none !important;
 }
 
-/* 2. NEUTRALIZE GRID CONTAINER */
-#pantry_list .grid-container {
+/* 2. SHARED: PREVENT LIGHTBOX */
+.preview {
+    display: none !important;
+}
+
+/* 3. SIDEBAR LIST STYLE (Selected Ingredients) */
+#pantry_ingredient_list .grid-container {
     display: flex !important;
     flex-direction: column !important;
     gap: 0px !important;
     padding: 0px !important;
-    border: none !important;
 }
 
-/* 3. STRIP BUTTON WRAPPER (DEFAULT & SELECTED) */
-/* 'all: unset' kills the hidden padding/min-height that causes gaps */
-#pantry_list .grid-container > button,
-#pantry_list .grid-container > button.selected {
+#pantry_ingredient_list .grid-container > button {
     all: unset !important;
     display: block !important;
     height: 60px !important;
+    min-height: 60px !important;
     width: 100% !important;
     margin: 0px !important;
     padding: 0px !important;
     cursor: pointer !important;
 }
 
-/* 4. ROW LAYOUT (DEFAULT & SELECTED) */
-/* We target .selected to ensure clicking doesn't change the layout */
-#pantry_list .thumbnail-item,
-#pantry_list .thumbnail-item.selected {
+#pantry_ingredient_list .thumbnail-item {
     display: flex !important;
-    flex-direction: row !important;
+    flex-direction: row !important; /* Image left, Text right */
     align-items: center !important;
     height: 60px !important;
     width: 100% !important;
     padding: 0px 10px !important;
-    margin: 0px !important;
     border-bottom: 1px solid #eee !important;
     background: white !important;
 }
 
-/* 5. SELECTION FEEDBACK */
-/* Adds a subtle color so you know it was clicked without it growing large */
-#pantry_list .thumbnail-item.selected {
-    background-color: #f0f7ff !important;
-}
-
-/* 6. IMAGE SIZE LOCK (DEFAULT & SELECTED) */
-#pantry_list .thumbnail-item img,
-#pantry_list .thumbnail-item.selected img {
-    width: 50px !important;
-    height: 50px !important;
+#pantry_ingredient_list .thumbnail-item img {
+    width: 45px !important;
+    height: 45px !important;
     object-fit: contain !important;
     margin-right: 15px !important;
     flex-shrink: 0 !important;
-    /* Prevent Gradio from centering/scaling the image when selected */
-    position: static !important;
-    transform: none !important;
 }
 
-/* 7. TEXT STYLE LOCK (DEFAULT & SELECTED) */
-#pantry_list .caption-label,
-#pantry_list .thumbnail-item.selected .caption-label {
-    font-size: 18px !important;
+/* 4. MAIN GRID STYLE (Available Recipes) */
+#pantry_recipe_list .grid-container {
+    display: grid !important;
+    gap: 10px !important;
+}
+
+#pantry_recipe_list .grid-container > button {
+    all: unset !important;
+    display: block !important;
+    cursor: pointer !important;
+}
+
+#pantry_recipe_list .thumbnail-item {
+    display: flex !important;
+    flex-direction: column !important; /* Image top, Text bottom */
+    background: white !important;
+    border: 1px solid #ddd !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    height: 100% !important;
+}
+
+#pantry_recipe_list .thumbnail-item img {
+    width: 100% !important;
+    height: 150px !important;
+    object-fit: cover !important;
+}
+
+/* 5. SELECTION FEEDBACK */
+.thumbnail-item.selected {
+    background-color: #f0f7ff !important;
+    border-left: 4px solid #2196F3 !important;
+}
+
+/* 6. CAPTION STYLING (The Text Labels) */
+/* This ensures labels are visible and positioned correctly in both layouts */
+.caption-label {
+    position: static !important;        /* Moves text out of 'hover' overlay mode */
+    display: block !important;
+    font-size: 16px !important;         /* legible size */
     font-weight: 500 !important;
     color: #333 !important;
-    position: static !important;
     background: transparent !important;
     padding: 0px !important;
     margin: 0px !important;
     box-shadow: none !important;
+    width: auto !important;
 }
 
-/* 8. DISABLE PREVIEW MODE LIGHTBOX */
-.preview {
-    display: none !important;
+/* Specific alignment for the Sidebar list text */
+#pantry_ingredient_list .caption-label {
+    text-align: left !important;
+    flex-grow: 1 !important;
 }
 
-/* 1. Force the button to a fixed height to match your checkbox row */
+/* Specific alignment for the Recipe grid text */
+#pantry_recipe_list .caption-label {
+    text-align: center !important;
+    padding: 8px 4px !important;
+}
+
+/* 7. CUSTOM BUTTONS (X-Buttons and Green Checks) */
 #pantry_image_x_btn {
     padding: 0px !important;
     height: 45px !important; 
@@ -835,54 +955,40 @@ button[aria-label="Clear"], button[aria-label="Upload"] {
     overflow: hidden !important;
 }
 
-/* 2. Target the internal Gradio flex container */
 #pantry_image_x_btn > div {
     height: 100% !important;
     width: 100% !important;
     padding: 0px !important;
-    gap: 0px !important; /* Removes the space Gradio keeps for text */
 }
 
-/* 3. Make the image fill the entire container */
 #pantry_image_x_btn img {
     height: 100% !important;
     width: 100% !important;
-    max-height: 100% !important;
-    object-fit: cover !important; /* Crops the JPEG to fill the square */
-    margin: 0 !important;
+    object-fit: cover !important;
 }
 
-/* 4. Completely remove the text span so it doesn't take up 1px of space */
 #pantry_image_x_btn span {
     display: none !important;
 }
 
-/* Target the specific button by its ID */
+/* 8. LARGE ACTION BUTTONS */
 #load_recipes_full_btn {
-    background-color: #28a745 !important; /* Standard Green */
-    color: white !important;              /* White Text */
-    height: 100% !important;              /* Fill vertical space */
-    min-height: 120px !important;         /* Adjust this to match your UI gap */
-    width: 100% !important;               /* Fill horizontal space */
-    font-size: 1.5em !important; /* Adjust to match Load Recipes */
+    background-color: #28a745 !important;
+    color: white !important;
+    height: 100% !important;
+    min-height: 120px !important;
+    width: 100% !important;
+    font-size: 1.5em !important;
     font-weight: bold !important;
-    border: none !important;
-    border-radius: 8px !important;        /* Matches your other controls */
-    cursor: pointer !important;
-}
-
-/* Optional: Add a hover effect so it feels interactive */
-#load_recipes_full_btn:hover {
-    background-color: #218838 !important; /* Slightly darker green */
+    border-radius: 8px !important;
 }
 
 #restart_btn {
-    grid-row: span 2; 
-    background-color: #b91c1c !important; /* Tailwind-style red */
+    background-color: #b91c1c !important;
     color: white !important;
-    font-size: 1.5em !important; /* Adjust to match Load Recipes */
+    font-size: 1.5em !important;
     font-weight: bold !important;
-    border: none !important;
+    border-radius: 8px !important;
 }
 """
 
@@ -1348,52 +1454,27 @@ with gr.Blocks(title="Unit to Pantry Recipe Selection System", css=combined_pant
 
                     selected_indices = gr.State([])
 
-                    # with gr.Row():
-                            
-                    #         with gr.Column(scale=2, min_width=300):
-                    #             # The Selected Ingredients Gallery (Items ready for the recipe)
-                    #             selected_ingredients_gallery = gr.Gallery(
-                    #                 value=__current_ingredient_gallery_items, 
-                    #                 elem_id='pantry_ingredient_list', 
-                    #                 label='Selected Ingredients',
-                    #                 columns=3, 
-                    #                 height=300, 
-                    #                 interactive=True
-                    #             )
-
-                    #         # The Available Recipes Gallery 
-                    #         with gr.Column(scale=3, min_width=400):
-                    #             recipe_gallery = gr.Gallery(
-                    #                 value=__recipe_gallery_items, 
-                    #                 elem_id='pantry_recipe_list', 
-                    #                 label='Available Recipes',
-                    #                 columns=3, 
-                    #                 height=300, 
-                    #                 interactive=True
-                    #             )
-
                     with gr.Row():
                         # Force the Ingredients list to be much narrower
-                        with gr.Column(scale=1, min_width=200): # Dropped scale from 2 to 1
+                        with gr.Column(scale=1, min_width=200): 
                             selected_ingredients_gallery = gr.Gallery(
                                 value=__current_ingredient_gallery_items, 
                                 elem_id='pantry_ingredient_list', 
                                 label='Selected Ingredients',
-                                columns=1, # Change back to 1 for a clean vertical list
-                                height=300, 
-                                object_fit="contain" # CRITICAL: stops the image from stretching
-                            )
+                                columns=1,           # Forces a clean vertical list format
+                                height=300,          # Keeps the sidebar compact
+                                object_fit="contain" # Prevents stretching of ingredient icons
+                            )                        
 
-                        # Give the Recipes the lion's share of the 50% left-side block
-                        with gr.Column(scale=2, min_width=300): # Kept at 2 or 3
+                        with gr.Column(scale=2, min_width=300): 
                             recipe_gallery = gr.Gallery(
                                 value=__recipe_gallery_items, 
                                 elem_id='pantry_recipe_list',                                 
                                 label='Available Recipes',
-                                columns=2, # 2 columns here looks better in a split view
-                                height=300, 
-                                object_fit="contain"
-                            )                    
+                                columns=2,           # Optimized for the larger main view
+                                height=300,          # Matches sidebar height for symmetry
+                                object_fit="contain" # Ensures recipe photos are fully visible
+                            )                        
                     
                     gr.Markdown("### 🔍 Selected Recipe Details")
                     with gr.Group(): # Group these related fields together visually
